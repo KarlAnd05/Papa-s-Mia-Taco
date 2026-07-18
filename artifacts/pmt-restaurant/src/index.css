@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Montserrat:wght@400;500;600;700;800&display=swap');
 @layer theme, base, clerk, components, utilities;
 @import 'tailwindcss';
 @import '@clerk/themes/shadcn.css';
@@ -69,65 +69,40 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* PMT THEME - DARK BY DEFAULT */
 :root {
-  --button-outline: rgba(255, 255, 255, 0.1);
-  --badge-outline: rgba(255, 255, 255, 0.05);
+  --brand-green: #0F5D2F;
+  --brand-red: #A71F29;
+  --brand-yellow: #F4AA1C;
+  --brand-cream: #F8F5EF;
+  --brand-black: #222222;
 
-  --opaque-button-border-intensity: 9;
-
-  --elevate-1: rgba(255, 255, 255, 0.04);
-  --elevate-2: rgba(255, 255, 255, 0.09);
-
-  /* Deep dark brown/black */
-  --background: 20 10% 4%;
-  /* Warm cream */
-  --foreground: 38 60% 90%;
-  
-  --border: 20 12% 15%;
-  --input: 20 12% 15%;
-  --ring: 38 90% 52%;
-
-  --card: 20 12% 8%;
-  --card-foreground: 38 60% 90%;
-  --card-border: 20 12% 15%;
-
-  --sidebar: 20 12% 8%;
-  --sidebar-foreground: 38 60% 90%;
-  --sidebar-border: 20 12% 15%;
-  --sidebar-primary: 38 90% 52%;
-  --sidebar-primary-foreground: 20 10% 4%;
-  --sidebar-accent: 20 12% 12%;
-  --sidebar-accent-foreground: 38 90% 52%;
-  --sidebar-ring: 38 90% 52%;
-
-  --popover: 20 12% 8%;
-  --popover-foreground: 38 60% 90%;
-  --popover-border: 20 12% 15%;
-
-  /* Warm amber */
-  --primary: 38 90% 52%;
-  --primary-foreground: 20 10% 4%;
-
-  --secondary: 20 12% 15%;
-  --secondary-foreground: 38 60% 90%;
-
-  --muted: 20 12% 12%;
-  --muted-foreground: 38 40% 70%;
-
-  --accent: 20 12% 12%;
-  --accent-foreground: 38 90% 52%;
-
-  --destructive: 0 84% 60%;
+  --background: 38 33% 95%;
+  --foreground: 0 0% 13%;
+  --primary: 143 72% 21%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 3 77% 39%;
+  --secondary-foreground: 0 0% 100%;
+  --accent: 42 90% 54%;
+  --accent-foreground: 0 0% 13%;
+  --card: 38 33% 95%;
+  --card-foreground: 0 0% 13%;
+  --muted: 38 20% 88%;
+  --muted-foreground: 0 0% 40%;
+  --border: 38 20% 80%;
+  --input: 38 20% 88%;
+  --ring: 143 72% 21%;
+  --destructive: 3 77% 39%;
   --destructive-foreground: 0 0% 100%;
+  --popover: 38 33% 95%;
+  --popover-foreground: 0 0% 13%;
 
-  --chart-1: 38 90% 52%; /* amber */
-  --chart-2: 24 90% 55%; /* burnt orange */
-  --chart-3: 15 80% 50%; /* deeper red-orange */
-  --chart-4: 45 90% 45%; /* gold */
-  --chart-5: 20 20% 30%; /* brown */
+  --chart-1: 38 90% 52%; 
+  --chart-2: 24 90% 55%; 
+  --chart-3: 15 80% 50%; 
+  --chart-4: 45 90% 45%; 
+  --chart-5: 20 20% 30%; 
 
-  --app-font-sans: 'Inter', sans-serif;
+  --app-font-sans: 'Montserrat', sans-serif;
   --app-font-serif: 'Playfair Display', serif;
   --app-font-mono: Menlo, monospace;
   
@@ -156,54 +131,26 @@
   --spacing: 0.25rem;
 }
 
-/* We mirror the same to .dark just in case, though the app is dark by default */
 .dark {
-  --button-outline: rgba(255, 255, 255, 0.1);
-  --badge-outline: rgba(255, 255, 255, 0.05);
-
-  --opaque-button-border-intensity: 9;
-
-  --elevate-1: rgba(255, 255, 255, 0.04);
-  --elevate-2: rgba(255, 255, 255, 0.09);
-
-  --background: 20 10% 4%;
-  --foreground: 38 60% 90%;
-  
-  --border: 20 12% 15%;
-  --input: 20 12% 15%;
-  --ring: 38 90% 52%;
-
-  --card: 20 12% 8%;
-  --card-foreground: 38 60% 90%;
-  --card-border: 20 12% 15%;
-
-  --sidebar: 20 12% 8%;
-  --sidebar-foreground: 38 60% 90%;
-  --sidebar-border: 20 12% 15%;
-  --sidebar-primary: 38 90% 52%;
-  --sidebar-primary-foreground: 20 10% 4%;
-  --sidebar-accent: 20 12% 12%;
-  --sidebar-accent-foreground: 38 90% 52%;
-  --sidebar-ring: 38 90% 52%;
-
-  --popover: 20 12% 8%;
-  --popover-foreground: 38 60% 90%;
-  --popover-border: 20 12% 15%;
-
-  --primary: 38 90% 52%;
-  --primary-foreground: 20 10% 4%;
-
-  --secondary: 20 12% 15%;
-  --secondary-foreground: 38 60% 90%;
-
-  --muted: 20 12% 12%;
-  --muted-foreground: 38 40% 70%;
-
-  --accent: 20 12% 12%;
-  --accent-foreground: 38 90% 52%;
-
-  --destructive: 0 84% 60%;
+  --background: 38 33% 95%;
+  --foreground: 0 0% 13%;
+  --primary: 143 72% 21%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 3 77% 39%;
+  --secondary-foreground: 0 0% 100%;
+  --accent: 42 90% 54%;
+  --accent-foreground: 0 0% 13%;
+  --card: 38 33% 95%;
+  --card-foreground: 0 0% 13%;
+  --muted: 38 20% 88%;
+  --muted-foreground: 0 0% 40%;
+  --border: 38 20% 80%;
+  --input: 38 20% 88%;
+  --ring: 143 72% 21%;
+  --destructive: 3 77% 39%;
   --destructive-foreground: 0 0% 100%;
+  --popover: 38 33% 95%;
+  --popover-foreground: 0 0% 13%;
 }
 
 @layer base {
@@ -225,67 +172,5 @@
     content: attr(data-placeholder);
     color: hsl(var(--muted-foreground));
     pointer-events: none;
-  }
-
-  .no-default-hover-elevate {
-  }
-
-  .no-default-active-elevate {
-  }
-
-  .toggle-elevate::before,
-  .toggle-elevate-2::before {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0px;
-    border-radius: inherit;
-    z-index: -1;
-  }
-
-  .toggle-elevate.toggle-elevated::before {
-    background-color: var(--elevate-2);
-  }
-
-  .border.toggle-elevate::before {
-    inset: -1px;
-  }
-
-  .hover-elevate:not(.no-default-hover-elevate),
-  .active-elevate:not(.no-default-active-elevate),
-  .hover-elevate-2:not(.no-default-hover-elevate),
-  .active-elevate-2:not(.no-default-active-elevate) {
-    position: relative;
-    z-index: 0;
-  }
-
-  .hover-elevate:not(.no-default-hover-elevate)::after,
-  .active-elevate:not(.no-default-active-elevate)::after,
-  .hover-elevate-2:not(.no-default-hover-elevate)::after,
-  .active-elevate-2:not(.no-default-active-elevate)::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0px;
-    border-radius: inherit;
-    z-index: 999;
-  }
-
-  .hover-elevate:hover:not(.no-default-hover-elevate)::after,
-  .active-elevate:active:not(.no-default-active-elevate)::after {
-    background-color: var(--elevate-1);
-  }
-
-  .hover-elevate-2:hover:not(.no-default-hover-elevate)::after,
-  .active-elevate-2:active:not(.no-default-active-elevate)::after {
-    background-color: var(--elevate-2);
-  }
-
-  .border.hover-elevate:not(.no-hover-interaction-elevate)::after,
-  .border.active-elevate:not(.no-active-interaction-elevate)::after,
-  .border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
-  .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
-  .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
-    inset: -1px;
   }
 }
