@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "PMT Mexican Restaurant"
+version = "1.0.0"
+id = "artifacts/pmt-restaurant"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24855
+
+[services.development]
+run = "pnpm --filter @workspace/pmt-restaurant run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pmt-restaurant", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pmt-restaurant/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24855"
+BASE_PATH = "/"
