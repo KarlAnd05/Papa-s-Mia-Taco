@@ -149,6 +149,7 @@ export function CustomerList() {
               <TableRow className="border-border">
                 <TableHead className="text-muted-foreground font-semibold">Name</TableHead>
                 <TableHead className="text-muted-foreground font-semibold">Contact</TableHead>
+                <TableHead className="text-muted-foreground font-semibold">Address</TableHead>
                 <TableHead className="text-muted-foreground font-semibold">Status</TableHead>
                 <TableHead className="text-muted-foreground font-semibold">Tier</TableHead>
                 <TableHead className="text-muted-foreground font-semibold text-right">Orders</TableHead>
@@ -172,10 +173,13 @@ export function CustomerList() {
               ) : (
                 customerData?.customers.map((c) => (
                   <TableRow key={c.id} className="border-border hover:bg-white/[0.02]">
-                    <TableCell className="font-medium text-white">{c.name}</TableCell>
+                    <TableCell className="font-medium text-foreground">{c.name}</TableCell>
                     <TableCell>
                       <div className="text-sm">{c.email || '-'}</div>
                       <div className="text-xs text-muted-foreground">{c.phone || '-'}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{[c.address, c.city, c.country].filter(Boolean).join(', ') || '-'}</div>
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={c.status} />
