@@ -10,6 +10,7 @@ import Home from "@/pages/Home";
 import SignInPage from "@/pages/SignIn";
 import SignUpPage from "@/pages/SignUp";
 import AdminRouter from "@/pages/Admin";
+import FeedbackPage from "@/pages/Feedback";
 import NotFound from "@/pages/NotFound";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -133,6 +134,7 @@ function ClerkProviderWithRoutes() {
           <ClerkQueryClientCacheInvalidator />
           <Switch>
             <Route path="/" component={Home} />
+            <Route path="/feedback" component={FeedbackPage} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route path="/admin/*?" component={AdminRouter} />

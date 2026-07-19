@@ -154,6 +154,9 @@ export default function Home() {
           <div className="flex items-center gap-6 text-sm font-semibold tracking-wide">
             <a href="#menu" className="hover:text-[#0F5D2F] transition-colors uppercase">Menu</a>
             <a href="#about" className="hover:text-[#0F5D2F] transition-colors uppercase">About</a>
+            <Link href="/feedback" className="text-[#A71F29] hover:text-[#A71F29]/80 transition-colors uppercase text-xs font-bold border-2 border-[#A71F29] px-4 py-1.5 rounded-full">
+              Leave Feedback
+            </Link>
             <Show when="signed-out">
               <Link href="/sign-in" className="text-muted-foreground hover:text-[#0F5D2F] transition-colors uppercase text-xs font-bold">
                 Staff Login
