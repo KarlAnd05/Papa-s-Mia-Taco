@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { menuData, MenuSection } from "@/data/menu";
 import { Link } from "wouter";
 import { Show } from "@clerk/react";
+import { Menu, X } from "lucide-react";
 
 function PapelPicadoBorder({ invert = false }: { invert?: boolean }) {
   const colors = invert 
@@ -132,26 +133,16 @@ function MenuItemCard({ item }: { item: any }) {
   );
 }
 
-export default function Home() {
-  const sectionsWithImages = menuData.filter(s => s.category !== 'Dips & Sides' && s.category !== 'Drinks' && s.category !== 'The Taco Bar');
-  const theTacoBar = menuData.find(s => s.category === 'The Taco Bar');
-  const dipsAndSides = menuData.find(s => s.category === 'Dips & Sides');
-  const drinks = menuData.find(s => s.category === 'Drinks');
-
+function Navbar() {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="min-h-screen bg-[#F8F5EF] text-[#222222] font-sans selection:bg-[#0F5D2F] selection:text-white">
-      {/* Top Border */}
-      <div className="absolute top-0 left-0 right-0 z-50">
-        <PapelPicadoBorder />
-      </div>
+    <>
+      <nav className="fixed top-0 left-0 right-0 z-40 bg-[#F8F5EF]/95 backdrop-blur-md border-b-2 border-[#0F5D2F] mt-[40px] shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[64px] flex items-center justify-between">
+          <div className="font-serif text-3xl font-bold tracking-tighter text-[#0F5D2F]">PMT</div>
 
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-40 bg-[#F8F5EF]/95 backdrop-blur-md border-b-2 border-[#0F5D2F] mt-[40px] shadow-sm transition-all duration-300">
-        <div className="max-w-6xl mx-auto px-6 h-[72px] flex items-center justify-between">
-          <div className="font-serif text-3xl font-bold tracking-tighter text-[#0F5D2F]">
-            PMT
-          </div>
-          <div className="flex items-center gap-6 text-sm font-semibold tracking-wide">
+          {/* Desktop links */}
+          <div className="hidden md:flex items-center gap-6 text-sm font-semibold tracking-wide">
             <a href="#menu" className="hover:text-[#0F5D2F] transition-colors uppercase">Menu</a>
             <a href="#about" className="hover:text-[#0F5D2F] transition-colors uppercase">About</a>
             <Link href="/feedback" className="text-[#A71F29] hover:text-[#A71F29]/80 transition-colors uppercase text-xs font-bold border-2 border-[#A71F29] px-4 py-1.5 rounded-full">
@@ -168,8 +159,51 @@ export default function Home() {
               </Link>
             </Show>
           </div>
+
+          {/* Mobile hamburger */}
+          <button
+            className="md:hidden p-2 rounded-lg text-[#0F5D2F] hover:bg-[#0F5D2F]/10 transition-colors"
+            onClick={() => setOpen((o) => !o)}
+            aria-label="Toggle menu"
+          >
+            {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
+
+        {/* Mobile dropdown */}
+        {open && (
+          <div className="md:hidden bg-[#F8F5EF] border-t border-[#0F5D2F]/20 px-4 pb-4 flex flex-col gap-3 text-sm font-semibold">
+            <a href="#menu" onClick={() => setOpen(false)} className="py-2 border-b border-[#0F5D2F]/10 uppercase tracking-wide text-[#222] hover:text-[#0F5D2F]">Menu</a>
+            <a href="#about" onClick={() => setOpen(false)} className="py-2 border-b border-[#0F5D2F]/10 uppercase tracking-wide text-[#222] hover:text-[#0F5D2F]">About</a>
+            <Link href="/feedback" onClick={() => setOpen(false)} className="py-2 border-b border-[#0F5D2F]/10 uppercase tracking-wide text-[#A71F29] font-bold">Leave Feedback</Link>
+            <Show when="signed-out">
+              <Link href="/sign-in" onClick={() => setOpen(false)} className="py-2 uppercase tracking-wide text-muted-foreground">Staff Login</Link>
+            </Show>
+            <Show when="signed-in">
+              <Link href="/admin" onClick={() => setOpen(false)} className="py-2 uppercase tracking-wide text-[#0F5D2F] font-bold">Admin Dashboard</Link>
+            </Show>
+          </div>
+        )}
       </nav>
+    </>
+  );
+}
+
+export default function Home() {
+  const sectionsWithImages = menuData.filter(s => s.category !== 'Dips & Sides' && s.category !== 'Drinks' && s.category !== 'The Taco Bar');
+  const theTacoBar = menuData.find(s => s.category === 'The Taco Bar');
+  const dipsAndSides = menuData.find(s => s.category === 'Dips & Sides');
+  const drinks = menuData.find(s => s.category === 'Drinks');
+
+  return (
+    <div className="min-h-screen bg-[#F8F5EF] text-[#222222] font-sans selection:bg-[#0F5D2F] selection:text-white">
+      {/* Top Border */}
+      <div className="absolute top-0 left-0 right-0 z-50">
+        <PapelPicadoBorder />
+      </div>
+
+      {/* Navbar */}
+      <Navbar />
 
       {/* Hero Section */}
       <section className="relative min-h-[95vh] flex items-center justify-center pt-28 pb-10 overflow-hidden bg-[#222]">

@@ -2,7 +2,7 @@ import { useLocation, Route, Switch } from "wouter";
 import { Show } from "@clerk/react";
 import { useGetAdminMe, useGetStatsOverview, getGetAdminMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Users, Receipt, TrendingUp, AlertTriangle, LogOut, ChevronRight, ShoppingBag } from "lucide-react";
+import { Loader2, Users, Receipt, TrendingUp, AlertTriangle, LogOut, ChevronRight, ShoppingBag, Menu, X } from "lucide-react";
 import { useClerk, useUser } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -129,57 +129,63 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { signOut } = useClerk();
-  
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const navigate = (path: string) => {
+    setLocation(path);
+    setSidebarOpen(false);
+  };
+
+  const navBtn = (path: string, label: string, Icon: any) => {
+    const active = path === '/admin' ? location === '/admin' : location.startsWith(path);
+    return (
+      <button
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+          active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+        }`}
+        onClick={() => navigate(path)}
+      >
+        <Icon className="w-5 h-5" />
+        {label}
+      </button>
+    );
+  };
+
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
+
+      {/* Mobile overlay backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 border-r border-border bg-card flex flex-col flex-shrink-0">
-        <div className="h-16 flex items-center px-6 border-b border-border">
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 z-40
+        w-64 border-r border-border bg-card flex flex-col flex-shrink-0
+        transition-transform duration-300 ease-in-out
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <div className="h-16 flex items-center justify-between px-6 border-b border-border">
           <div className="font-serif text-2xl font-bold tracking-tighter text-primary">
             PMT <span className="text-sm font-sans text-muted-foreground ml-2 font-normal uppercase tracking-widest">Admin</span>
           </div>
+          <button className="lg:hidden p-1 text-muted-foreground hover:text-foreground" onClick={() => setSidebarOpen(false)}>
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        
-        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
-          <button 
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-              location === '/admin' 
-                ? 'bg-primary/10 text-primary' 
-                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
-            }`}
-            onClick={() => setLocation('/admin')}
-          >
-            <TrendingUp className="w-5 h-5" />
-            Dashboard
-          </button>
-          
-          <button 
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-              location.startsWith('/admin/customers') 
-                ? 'bg-primary/10 text-primary' 
-                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
-            }`}
-            onClick={() => setLocation('/admin/customers')}
-          >
-            <Users className="w-5 h-5" />
-            Customers
-          </button>
 
-          <button
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-              location.startsWith('/admin/orders')
-                ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
-            }`}
-            onClick={() => setLocation('/admin/orders')}
-          >
-            <ShoppingBag className="w-5 h-5" />
-            Orders
-          </button>
+        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
+          {navBtn('/admin', 'Dashboard', TrendingUp)}
+          {navBtn('/admin/customers', 'Customers', Users)}
+          {navBtn('/admin/orders', 'Orders', ShoppingBag)}
         </div>
-        
+
         <div className="p-4 border-t border-border">
-          <button 
+          <button
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
             onClick={() => signOut({ redirectUrl: '/' })}
           >
@@ -188,11 +194,25 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
-      
+
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-background p-8">
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile top bar */}
+        <div className="lg:hidden h-14 flex items-center justify-between px-4 border-b border-border bg-card flex-shrink-0">
+          <button
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="font-serif text-xl font-bold text-primary">PMT Admin</div>
+          <div className="w-9" /> {/* spacer */}
+        </div>
+
+        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-8">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

@@ -211,10 +211,10 @@ export function AdminOrdersPage() {
   const menuSections = menuData.filter((s) => s.items.some((i) => i.price > 0));
 
   return (
-    <div className="flex gap-6 h-[calc(100vh-100px)] overflow-hidden">
+    <div className="flex flex-col lg:flex-row gap-6">
 
       {/* ── Left: Menu ── */}
-      <div className="flex-1 overflow-y-auto pr-1 space-y-6">
+      <div className="flex-1 space-y-6 lg:overflow-y-auto lg:max-h-[calc(100vh-100px)] lg:pr-1">
         <div>
           <h1 className="text-2xl font-serif font-bold text-foreground">New Order</h1>
           <p className="text-sm text-muted-foreground mt-1">Select items from the menu, then confirm on the right.</p>
@@ -267,7 +267,7 @@ export function AdminOrdersPage() {
       </div>
 
       {/* ── Right: Order Summary ── */}
-      <div className="w-80 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
+      <div className="w-full lg:w-80 lg:flex-shrink-0 flex flex-col gap-4 lg:overflow-y-auto lg:max-h-[calc(100vh-100px)]">
 
         {/* Success flash */}
         {success && (
