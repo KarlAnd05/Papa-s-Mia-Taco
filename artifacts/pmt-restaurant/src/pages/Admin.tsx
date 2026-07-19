@@ -1,15 +1,15 @@
 import { useLocation, Route, Switch } from "wouter";
 import { Show } from "@clerk/react";
-import { useGetAdminMe, useGetStatsOverview, useListCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer, getGetAdminMeQueryKey, getListCustomersQueryKey } from "@workspace/api-client-react";
+import { useGetAdminMe, useGetStatsOverview, getGetAdminMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Users, Receipt, TrendingUp, AlertTriangle, LogOut, ChevronRight, Search, Plus, Filter, Edit, Trash2 } from "lucide-react";
+import { Loader2, Users, Receipt, TrendingUp, AlertTriangle, LogOut, ChevronRight, ShoppingBag } from "lucide-react";
 import { useClerk, useUser } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
-import { CustomerList, CustomerFormModal } from "./AdminCustomers";
+import { CustomerList } from "./AdminCustomers";
+import { AdminOrdersPage } from "./AdminOrders";
 
 export default function AdminRouter() {
   const [, setLocation] = useLocation();
@@ -24,6 +24,7 @@ export default function AdminRouter() {
           <Switch>
             <Route path="/admin" component={AdminDashboard} />
             <Route path="/admin/customers" component={CustomerList} />
+            <Route path="/admin/orders" component={AdminOrdersPage} />
           </Switch>
         </AdminLayout>
       </AdminGuard>
@@ -162,6 +163,18 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
           >
             <Users className="w-5 h-5" />
             Customers
+          </button>
+
+          <button
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              location.startsWith('/admin/orders')
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+            }`}
+            onClick={() => setLocation('/admin/orders')}
+          >
+            <ShoppingBag className="w-5 h-5" />
+            Orders
           </button>
         </div>
         
