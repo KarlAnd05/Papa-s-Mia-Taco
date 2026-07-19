@@ -16,4 +16,7 @@ export default defineConfig({
   server: {
     allowedHosts: true,
   },
+  build: {
+    outDir: 'dist/public',
+  },
 })
