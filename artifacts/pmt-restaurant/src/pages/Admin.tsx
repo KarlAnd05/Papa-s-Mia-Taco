@@ -2,7 +2,7 @@ import { useLocation, Route, Switch } from "wouter";
 import { Show } from "@clerk/react";
 import { useGetAdminMe, useGetStatsOverview, getGetAdminMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Users, Receipt, TrendingUp, AlertTriangle, LogOut, ChevronRight, ShoppingBag, Menu, X } from "lucide-react";
+import { Loader2, Users, Receipt, TrendingUp, AlertTriangle, LogOut, ChevronRight, ShoppingBag, Menu, X, UtensilsCrossed } from "lucide-react";
 import { useClerk, useUser } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { CustomerList } from "./AdminCustomers";
 import { AdminOrdersPage } from "./AdminOrders";
+import { AdminMenu } from "./AdminMenu";
 
 export default function AdminRouter() {
   const [, setLocation] = useLocation();
@@ -25,6 +26,7 @@ export default function AdminRouter() {
             <Route path="/admin" component={AdminDashboard} />
             <Route path="/admin/customers" component={CustomerList} />
             <Route path="/admin/orders" component={AdminOrdersPage} />
+            <Route path="/admin/menu" component={AdminMenu} />
           </Switch>
         </AdminLayout>
       </AdminGuard>
@@ -182,6 +184,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
           {navBtn('/admin', 'Dashboard', TrendingUp)}
           {navBtn('/admin/customers', 'Customers', Users)}
           {navBtn('/admin/orders', 'Orders', ShoppingBag)}
+          {navBtn('/admin/menu', 'Menu & Pricing', UtensilsCrossed)}
         </div>
 
         <div className="p-4 border-t border-border">

@@ -193,6 +193,9 @@ export function CustomerList() {
                     <TableCell className="text-right text-white font-mono">${c.totalSpent.toFixed(2)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => setViewingCustomer(c)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="View orders">
+                          <Eye className="w-4 h-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => openEditModal(c)} className="h-8 w-8 text-muted-foreground hover:text-white">
                           <Edit className="w-4 h-4" />
                         </Button>
