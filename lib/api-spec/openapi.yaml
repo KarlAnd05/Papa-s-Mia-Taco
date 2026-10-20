@@ -12,8 +12,6 @@ tags:
     description: Health operations
   - name: customers
     description: Customer management
-  - name: admin
-    description: Admin operations
   - name: stats
     description: Dashboard statistics
 
@@ -31,24 +29,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
-
-  /admin/me:
-    get:
-      operationId: getAdminMe
-      tags: [admin]
-      summary: Get current admin user
-      description: Returns current authenticated admin user info
-      responses:
-        "200":
-          description: Admin user info
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminUser"
-        "401":
-          description: Unauthorized
-        "403":
-          description: Forbidden - not an admin
 
   /stats/overview:
     get:
@@ -214,19 +194,6 @@ components:
           type: string
       required:
         - status
-
-    AdminUser:
-      type: object
-      properties:
-        clerkUserId:
-          type: string
-        email:
-          type: string
-        name:
-          type: string
-        isAdmin:
-          type: boolean
-      required: [clerkUserId, isAdmin]
 
     StatsOverview:
       type: object

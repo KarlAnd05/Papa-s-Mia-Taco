@@ -1,97 +1,18 @@
-import React, { useState } from "react";
-import { menuData, MenuSection } from "@/data/menu";
+import React from "react";
 import { Link } from "wouter";
-import { Show } from "@clerk/react";
-import { Menu, X } from "lucide-react";
-
-function PapelPicadoBorder({ invert = false }: { invert?: boolean }) {
-  const colors = invert 
-    ? ['#F4AA1C', '#0F5D2F', '#A71F29', '#0F5D2F', '#F4AA1C', '#0F5D2F', '#A71F29', '#0F5D2F'] 
-    : ['#0F5D2F', '#F4AA1C', '#A71F29', '#F4AA1C', '#0F5D2F', '#A71F29', '#F4AA1C', '#0F5D2F'];
-  const triangleW = 50;
-  const triangleH = 32;
-  const count = 30; // enough to fill any width
-  return (
-    <div className="w-full overflow-hidden" style={{ height: triangleH + 8 }}>
-      <svg width={triangleW * count} height={triangleH + 8} style={{ display: 'block' }}>
-        {Array.from({ length: count }).map((_, i) => (
-          <polygon
-            key={i}
-            points={`${i * triangleW},0 ${(i + 1) * triangleW},0 ${i * triangleW + triangleW / 2},${triangleH}`}
-            fill={colors[i % colors.length]}
-          />
-        ))}
-        {/* thin rope line */}
-        <line x1="0" y1="4" x2={triangleW * count} y2="4" stroke="#222" strokeWidth="1.5" opacity="0.3" />
-      </svg>
-    </div>
-  );
-}
-
-function WaveDivider({ color = '#0F5D2F', flip = false }: { color?: string, flip?: boolean }) {
-  return (
-    <div style={{ lineHeight: 0, transform: flip ? 'scaleY(-1)' : undefined }}>
-      <svg viewBox="0 0 1440 60" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: 60 }}>
-        <path d="M0,30 C240,60 480,0 720,30 C960,60 1200,0 1440,30 L1440,60 L0,60 Z" fill={color} />
-      </svg>
-    </div>
-  );
-}
-
-function ScallopedEdge({ fill = '#F8F5EF', bg = '#0F5D2F' }: { fill?: string, bg?: string }) {
-  const n = 40;
-  const r = 20;
-  const w = n * r * 2;
-  const h = r;
-  const d = Array.from({ length: n }).map((_, i) =>
-    `A ${r} ${r} 0 0 1 ${(i + 1) * r * 2} 0`
-  ).join(' ');
-  return (
-    <div style={{ background: bg, lineHeight: 0 }}>
-      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: 24 }}>
-        <path d={`M0,0 ${d} L${w},0 L${w},${h} L0,${h} Z`} fill={fill} />
-      </svg>
-    </div>
-  );
-}
-
-function BoostBox({ text }: { text: string }) {
-  return (
-    <div style={{
-      background: '#0F5D2F',
-      border: '3px dashed #F4AA1C',
-      borderRadius: 16,
-      padding: '16px 20px',
-      margin: '12px 0',
-    }}>
-      <p style={{ color: '#F4AA1C', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-        Boost Your Meal
-      </p>
-      <p style={{ color: '#FFCA5F', fontSize: 13, lineHeight: 1.6, margin: 0 }}>{text}</p>
-    </div>
-  );
-}
-
-const HEADING_COLORS = ['#0F5D2F', '#A71F29', '#F4AA1C'];
-
-function SectionHeading({ text, index }: { text: string, index: number }) {
-  const color = HEADING_COLORS[index % 3];
-  return (
-    <div className="text-center mb-8">
-      <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', fontWeight: 900, color, lineHeight: 1, letterSpacing: '-0.02em', fontStyle: 'italic' }}>
-        {text}
-      </h2>
-      {/* Zigzag underline */}
-      <svg viewBox="0 0 200 12" style={{ width: 200, height: 12, display: 'block', margin: '8px auto 0' }}>
-        <polyline points="0,10 10,2 20,10 30,2 40,10 50,2 60,10 70,2 80,10 90,2 100,10 110,2 120,10 130,2 140,10 150,2 160,10 170,2 180,10 190,2 200,10" fill="none" stroke={color} strokeWidth="2.5" />
-      </svg>
-    </div>
-  );
-}
+import { Loader2 } from "lucide-react";
+import { groupMenu, useMenu, usePublicSettings } from "@/hooks/useMenu";
+import { menuPrice } from "@/lib/format";
+import type { MenuItem } from "@/lib/types";
+import { BoostBox, PapelPicadoBorder, ScallopedEdge, SectionHeading, WaveDivider } from "@/components/site/decor";
+import { SiteNavbar } from "@/components/site/SiteNavbar";
+import { SiteFooter } from "@/components/site/SiteFooter";
+import { LoadError } from "@/components/site/form";
 
 const SECTION_IMAGES: Record<string, { src: string, border: string }> = {
   "Appetizers": { src: "/images/appetizers.jpg", border: "6px solid #F8F5EF" },
   "Tacos": { src: "/images/tacos.jpg", border: "6px solid #0F5D2F" },
+  "Birria Pulled Beef": { src: "/images/birria.jpg", border: "6px solid #F4AA1C" },
   "Burritos": { src: "/images/burritos.jpg", border: "6px solid #A71F29" },
   "Burrito Bowls": { src: "/images/burrito-bowl.jpg", border: "6px solid #F4AA1C" },
   "Salads & Shakers": { src: "/images/salads.jpg", border: "6px solid #0F5D2F" },
@@ -100,27 +21,27 @@ const SECTION_IMAGES: Record<string, { src: string, border: string }> = {
   "Dessert": { src: "/images/churros.jpg", border: "6px solid #A71F29" },
 };
 
-function MenuItemCard({ item }: { item: any }) {
+function MenuItemCard({ item }: { item: MenuItem }) {
   return (
-    <div className="relative flex flex-col mb-6">
+    <div className={`relative flex flex-col ${item.description || item.note ? "mb-6" : "mb-2"}`}>
       <div className="flex justify-between items-baseline gap-2 mb-1">
-        <h4 className="text-[1rem] font-bold text-[#222222] flex items-center gap-2">
+        <h4 className="text-[1rem] font-bold text-[#222222] min-w-0">
           {item.name}
           {item.isNew && (
-            <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-[#A71F29] text-white rounded-sm">
+            <span className="inline-block align-[2px] ml-2 px-1.5 py-0.5 text-[9px] leading-none uppercase tracking-wider font-bold bg-[#A71F29] text-white rounded-sm">
               New
             </span>
           )}
         </h4>
-        <div className="flex-1 border-b-[2px] border-dotted border-[#222222]/20 mx-2 opacity-50 relative top-[-4px]"></div>
+        <div className="flex-1 min-w-4 border-b-[2px] border-dotted border-[#222222]/20 mx-1 opacity-50 relative top-[-4px]"></div>
         <span className="text-[1rem] font-extrabold text-[#0F5D2F] whitespace-nowrap">
-          ${item.price.toFixed(2).replace(/\.00$/, '')}
+          {menuPrice(item.price)}
         </span>
       </div>
       
-      {item.desc && (
+      {item.description && (
         <p className="text-[#555555] text-[0.85rem] leading-relaxed font-normal mb-1">
-          {item.desc}
+          {item.description}
         </p>
       )}
       
@@ -133,63 +54,10 @@ function MenuItemCard({ item }: { item: any }) {
   );
 }
 
-function Navbar() {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <nav className="fixed top-0 left-0 right-0 z-40 bg-[#F8F5EF]/95 backdrop-blur-md border-b-2 border-[#0F5D2F] mt-[40px] shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[64px] flex items-center justify-between">
-          <div className="font-serif text-3xl font-bold tracking-tighter text-[#0F5D2F]">PMT</div>
-
-          {/* Desktop links */}
-          <div className="hidden md:flex items-center gap-6 text-sm font-semibold tracking-wide">
-            <a href="#menu" className="hover:text-[#0F5D2F] transition-colors uppercase">Menu</a>
-            <a href="#about" className="hover:text-[#0F5D2F] transition-colors uppercase">About</a>
-            <Link href="/feedback" className="text-[#A71F29] hover:text-[#A71F29]/80 transition-colors uppercase text-xs font-bold border-2 border-[#A71F29] px-4 py-1.5 rounded-full">
-              Leave Feedback
-            </Link>
-            <Show when="signed-out">
-              <Link href="/sign-in" className="text-muted-foreground hover:text-[#0F5D2F] transition-colors uppercase text-xs font-bold">
-                Staff Login
-              </Link>
-            </Show>
-            <Show when="signed-in">
-              <Link href="/admin" className="text-[#0F5D2F] hover:text-[#0F5D2F]/80 transition-colors uppercase text-xs flex items-center gap-2 border-2 border-[#0F5D2F] px-4 py-1.5 rounded-full font-bold">
-                Dashboard
-              </Link>
-            </Show>
-          </div>
-
-          {/* Mobile hamburger */}
-          <button
-            className="md:hidden p-2 rounded-lg text-[#0F5D2F] hover:bg-[#0F5D2F]/10 transition-colors"
-            onClick={() => setOpen((o) => !o)}
-            aria-label="Toggle menu"
-          >
-            {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-        </div>
-
-        {/* Mobile dropdown */}
-        {open && (
-          <div className="md:hidden bg-[#F8F5EF] border-t border-[#0F5D2F]/20 px-4 pb-4 flex flex-col gap-3 text-sm font-semibold">
-            <a href="#menu" onClick={() => setOpen(false)} className="py-2 border-b border-[#0F5D2F]/10 uppercase tracking-wide text-[#222] hover:text-[#0F5D2F]">Menu</a>
-            <a href="#about" onClick={() => setOpen(false)} className="py-2 border-b border-[#0F5D2F]/10 uppercase tracking-wide text-[#222] hover:text-[#0F5D2F]">About</a>
-            <Link href="/feedback" onClick={() => setOpen(false)} className="py-2 border-b border-[#0F5D2F]/10 uppercase tracking-wide text-[#A71F29] font-bold">Leave Feedback</Link>
-            <Show when="signed-out">
-              <Link href="/sign-in" onClick={() => setOpen(false)} className="py-2 uppercase tracking-wide text-muted-foreground">Staff Login</Link>
-            </Show>
-            <Show when="signed-in">
-              <Link href="/admin" onClick={() => setOpen(false)} className="py-2 uppercase tracking-wide text-[#0F5D2F] font-bold">Admin Dashboard</Link>
-            </Show>
-          </div>
-        )}
-      </nav>
-    </>
-  );
-}
-
 export default function Home() {
+  const { data: items, isLoading, isError, isFetching, refetch } = useMenu();
+  const location = usePublicSettings().data?.restaurant.location;
+  const menuData = groupMenu(items ?? [], { availableOnly: true });
   const sectionsWithImages = menuData.filter(s => s.category !== 'Dips & Sides' && s.category !== 'Drinks' && s.category !== 'The Taco Bar');
   const theTacoBar = menuData.find(s => s.category === 'The Taco Bar');
   const dipsAndSides = menuData.find(s => s.category === 'Dips & Sides');
@@ -203,7 +71,7 @@ export default function Home() {
       </div>
 
       {/* Navbar */}
-      <Navbar />
+      <SiteNavbar variant="overlay" />
 
       {/* Hero Section */}
       <section className="relative min-h-[95vh] flex items-center justify-center pt-28 pb-10 overflow-hidden bg-[#222]">
@@ -215,9 +83,16 @@ export default function Home() {
         <div className="absolute inset-0 z-10 bg-gradient-to-t from-[#0F5D2F]/80 via-[#0F5D2F]/40 to-transparent mix-blend-multiply" />
         <div className="absolute inset-0 z-10 bg-gradient-to-r from-[#111]/60 via-transparent to-transparent" />
         
-        <div className="relative z-20 max-w-6xl mx-auto px-6 w-full flex flex-col items-center text-center mt-10">
+        <div className="relative z-20 max-w-6xl mx-auto px-6 w-full flex flex-col items-center text-center mt-4 md:mt-8">
+          <img
+            src={`${import.meta.env.BASE_URL}logo.webp`}
+            alt=""
+            width={480}
+            height={447}
+            className="w-32 md:w-44 h-auto mb-5 drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+          />
           <div className="inline-block mb-4 text-[#F4AA1C] text-sm font-bold tracking-[0.2em] uppercase">
-            Est. 2024 · Montreal
+            Est. 2024{location ? ` · ${location}` : ""}
           </div>
           <h1 className="font-serif text-5xl md:text-7xl lg:text-[7rem] leading-[1] font-black tracking-tight text-white mb-6 italic drop-shadow-lg">
             Authentic Mexican <br /> Street Food
@@ -225,11 +100,22 @@ export default function Home() {
           <p className="text-xl md:text-2xl text-[#F8F5EF] max-w-2xl font-light leading-relaxed mb-10 drop-shadow-md">
             Made with love, served with fire.
           </p>
-          <a 
-            href="#menu" 
-            className="group relative inline-flex items-center justify-center px-10 py-5 font-bold text-white bg-[#0F5D2F] rounded-full transition-transform hover:scale-[1.05] active:scale-[0.98] shadow-xl"
-          >
-            <span className="relative z-10 tracking-widest uppercase text-[0.9rem]">See Our Menu</span>
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <Link
+              href="/order"
+              className="group relative inline-flex items-center justify-center px-10 py-5 font-bold text-white bg-[#0F5D2F] rounded-full transition-transform hover:scale-[1.05] active:scale-[0.98] shadow-xl"
+            >
+              <span className="relative z-10 tracking-widest uppercase text-[0.9rem]">Order Online</span>
+            </Link>
+            <Link
+              href="/reservations"
+              className="inline-flex items-center justify-center px-10 py-5 font-bold text-[#222] bg-[#F4AA1C] rounded-full transition-transform hover:scale-[1.05] active:scale-[0.98] shadow-xl"
+            >
+              <span className="tracking-widest uppercase text-[0.9rem]">Book a Table</span>
+            </Link>
+          </div>
+          <a href="#menu" className="mt-6 text-white/90 hover:text-white text-sm font-semibold uppercase tracking-widest underline-offset-4 hover:underline">
+            See our menu
           </a>
         </div>
       </section>
@@ -240,9 +126,19 @@ export default function Home() {
       </div>
 
       {/* Menu Section */}
-      <section id="menu" className="relative z-20 bg-[#F8F5EF] pt-20 pb-32">
+      <section id="menu" className="relative z-20 bg-[#F8F5EF] pt-20 pb-32 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
-          
+          {isError && !items && (
+            <div className="max-w-xl mx-auto px-6 py-16">
+              <LoadError what="the menu" onRetry={() => refetch()} retrying={isFetching} />
+            </div>
+          )}
+          {isLoading && (
+            <div className="flex justify-center py-24">
+              <Loader2 className="w-8 h-8 animate-spin text-[#0F5D2F]" />
+            </div>
+          )}
+
           {sectionsWithImages.map((section, idx) => {
             const isEven = idx % 2 === 0;
             const imgData = SECTION_IMAGES[section.category];
@@ -251,17 +147,17 @@ export default function Home() {
               <React.Fragment key={section.category}>
                 <div className={`flex flex-col ${isEven ? 'md:flex-row' : 'md:flex-row-reverse'} items-center gap-12 px-6 py-20`}>
                   
-                  {/* Image Column */}
-                  <div className="w-full md:w-1/2 flex justify-center">
-                    {imgData && (
+                  {/* Image Column (categories without a photo use the full width) */}
+                  {imgData && (
+                    <div className="w-full md:w-1/2 flex justify-center">
                       <div className="relative w-full max-w-md aspect-[4/5] rounded-[32px] overflow-hidden shadow-2xl" style={{ border: imgData.border }}>
-                        <img src={imgData.src} alt={section.category} className="w-full h-full object-cover" />
+                        <img src={imgData.src} alt={section.category} loading="lazy" className="w-full h-full object-cover" />
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {/* Content Column */}
-                  <div className="w-full md:w-1/2">
+                  <div className={imgData ? "w-full md:w-1/2" : "w-full md:w-2/3 mx-auto"}>
                     <SectionHeading text={section.category} index={idx} />
                     
                     {section.callout && (
@@ -271,7 +167,7 @@ export default function Home() {
                     )}
 
                     {section.boost && (
-                      <BoostBox text={section.boost.replace(/Boost:/i, '')} />
+                      <BoostBox text={section.boost.replace(/^.*?Boost:\s*/i, '')} />
                     )}
 
                     <div className="mt-8 flex flex-col gap-2">
@@ -309,17 +205,19 @@ export default function Home() {
                 {theTacoBar.items.map(item => (
                   <div key={item.name} className="mb-8">
                     <h3 className="text-2xl font-bold mb-4">{item.name}</h3>
-                    <p className="text-lg text-white/90 leading-relaxed mb-8">{item.desc}</p>
-                    <div className="flex items-end gap-4">
-                      <span className="text-6xl font-black text-[#F4AA1C]">${item.price.toFixed(2).replace(/\.00$/, '')}</span>
-                      <span className="text-lg font-bold bg-[#A71F29] px-4 py-2 rounded-full mb-2 uppercase tracking-wide">Serves 15 Tacos</span>
+                    <p className="text-lg text-white/90 leading-relaxed mb-8">{item.description}</p>
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+                      <span className="text-6xl font-black text-[#F4AA1C] leading-none">{menuPrice(item.price)}</span>
+                      {item.note && (
+                        <span className="text-sm sm:text-base font-bold bg-[#A71F29] px-4 py-2 rounded-full uppercase tracking-wide">{item.note}</span>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
               <div className="w-full md:w-1/2">
-                <div className="w-full rounded-[32px] overflow-hidden shadow-2xl aspect-video" style={{ border: '6px solid #F4AA1C' }}>
-                  <img src={SECTION_IMAGES['The Taco Bar']?.src} alt="The Taco Bar" className="w-full h-full object-cover" />
+                <div className="w-full max-w-md mx-auto rounded-[32px] overflow-hidden shadow-2xl aspect-[4/5]" style={{ border: '6px solid #F4AA1C' }}>
+                  <img src={SECTION_IMAGES['The Taco Bar']?.src} alt="The Taco Bar" loading="lazy" className="w-full h-full object-cover" />
                 </div>
               </div>
             </div>
@@ -373,13 +271,13 @@ export default function Home() {
       </section>
 
       {/* About Section */}
-      <section id="about" className="py-32 bg-[#F8F5EF] relative border-t-[8px] border-[#0F5D2F] border-dashed">
+      <section id="about" className="scroll-mt-16 py-32 bg-[#F8F5EF] relative border-t-[8px] border-[#0F5D2F] border-dashed">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="font-serif text-4xl md:text-6xl font-black text-[#0F5D2F] mb-8 italic">
             Family-Made. <br /> Street-Fresh.
           </h2>
           <p className="text-xl md:text-2xl text-[#222222] font-medium leading-relaxed max-w-2xl mx-auto mb-16">
-            A vibrant, modern taqueria in Montreal. Real street tacos, zero compromises. We bring the heat, the flavor, and the energy. Come hungry.
+            A vibrant, modern taqueria{location ? ` in ${location}` : ""}. Real street tacos, zero compromises. We bring the heat, the flavor, and the energy. Come hungry.
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -394,70 +292,15 @@ export default function Home() {
               <p className="text-sm text-[#555]">Guac mashed fresh, salsa made from scratch.</p>
             </div>
             <div className="bg-white p-8 rounded-[24px] shadow-lg border-2 border-[#0F5D2F]">
-              <div className="text-4xl mb-4">🍁</div>
-              <h3 className="font-bold text-lg mb-2 uppercase tracking-wide">Montreal-Made</h3>
+              <div className="text-4xl mb-4">🌶️</div>
+              <h3 className="font-bold text-lg mb-2 uppercase tracking-wide">Made in Lebanon</h3>
               <p className="text-sm text-[#555]">Local love meets authentic Mexican street food.</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative bg-[#0F5D2F] pt-20 pb-10 overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 z-10">
-           <svg viewBox="0 0 1440 30" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: 30, transform: 'scaleY(-1)' }}>
-              <path d="M0,15 C240,30 480,0 720,15 C960,30 1200,0 1440,15 L1440,30 L0,30 Z" fill="#F8F5EF" />
-           </svg>
-        </div>
-
-        <div className="max-w-6xl mx-auto px-6 relative z-10 flex flex-col md:flex-row justify-between items-start gap-12 pt-8">
-          <div className="max-w-xs">
-            <div className="font-serif text-5xl font-bold tracking-tighter text-[#F4AA1C] mb-6 italic">
-              PMT
-            </div>
-            <p className="text-[#F8F5EF] text-sm leading-relaxed mb-8 font-medium">
-              Made with love, served with fire.
-            </p>
-            <div className="flex gap-4">
-              <div className="w-10 h-10 rounded-full border-2 border-[#F4AA1C] flex items-center justify-center text-[#F4AA1C] hover:bg-[#F4AA1C] hover:text-[#0F5D2F] transition-colors cursor-pointer font-bold text-sm">
-                Ig
-              </div>
-              <div className="w-10 h-10 rounded-full border-2 border-[#F4AA1C] flex items-center justify-center text-[#F4AA1C] hover:bg-[#F4AA1C] hover:text-[#0F5D2F] transition-colors cursor-pointer font-bold text-sm">
-                Fb
-              </div>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-12 text-sm">
-            <div>
-              <h5 className="text-[#F4AA1C] font-black tracking-widest uppercase mb-6 text-xs">Hours</h5>
-              <ul className="space-y-3 text-[#F8F5EF] font-medium">
-                <li>Mon - Thu: 11am - 10pm</li>
-                <li>Fri - Sat: 11am - 12am</li>
-                <li>Sunday: 12pm - 9pm</li>
-              </ul>
-            </div>
-            <div>
-              <h5 className="text-[#F4AA1C] font-black tracking-widest uppercase mb-6 text-xs">Visit</h5>
-              <ul className="space-y-3 text-[#F8F5EF] font-medium">
-                <li>1234 Saint-Laurent Blvd</li>
-                <li>Montreal, QC</li>
-                <li>(514) 555-TACO</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        
-        <div className="max-w-6xl mx-auto px-6 mt-20 pt-8 border-t-2 border-[#F8F5EF]/20 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-bold text-[#F8F5EF]/60">
-          <p>© {new Date().getFullYear()} PMT Mexican Restaurant. All rights reserved.</p>
-          <Show when="signed-out">
-            <Link href="/sign-in" className="hover:text-[#F4AA1C] transition-colors uppercase tracking-wider">Staff Login</Link>
-          </Show>
-          <Show when="signed-in">
-            <Link href="/admin" className="hover:text-[#F4AA1C] transition-colors uppercase tracking-wider">Admin Dashboard</Link>
-          </Show>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

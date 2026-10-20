@@ -1,372 +1,311 @@
-import { useState, useMemo } from "react";
-import { menuData, type MenuItem } from "@/data/menu";
-import { useListCustomers } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Minus, ShoppingCart, Trash2, User, Search, ChevronDown, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Banknote, Bike, Calculator, ChevronLeft, ChevronRight, CreditCard, Loader2, MapPin, Phone, Printer, Search, Store, Utensils, X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { usePublicSettings } from "@/hooks/useMenu";
+import { apiFetch, errorMessage } from "@/lib/api";
+import { ORDER_TYPE_LABELS, PAYMENT_LABELS, formatDateTime, money, orderStatusLabel } from "@/lib/format";
+import type { Order, OrderStatus } from "@/lib/types";
+import { PrintPortal, Receipt } from "@/components/Receipt";
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Order management: incoming online orders, POS sales and order history.
 
-type CartItem = {
-  itemName: string;
-  itemCategory: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
+type OrdersResponse = { orders: Order[]; total: number; page: number; totalPages: number };
+type Tab = "active" | "completed" | "cancelled" | "all";
+
+const STATUS_CLASSES: Record<OrderStatus, string> = {
+  pending: "bg-secondary text-secondary-foreground",
+  preparing: "bg-accent text-accent-foreground",
+  ready: "bg-primary text-primary-foreground",
+  completed: "bg-muted text-muted-foreground",
+  cancelled: "bg-destructive/15 text-destructive",
 };
 
-// ── Quantity button ────────────────────────────────────────────────────────
-
-function QtyControl({ qty, onInc, onDec }: { qty: number; onInc: () => void; onDec: () => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        onClick={onDec}
-        disabled={qty === 0}
-        className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      >
-        <Minus className="w-3 h-3" />
-      </button>
-      <span className={`w-7 text-center text-sm font-bold tabular-nums ${qty > 0 ? "text-primary" : "text-muted-foreground"}`}>
-        {qty}
-      </span>
-      <button
-        type="button"
-        onClick={onInc}
-        className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
-      >
-        <Plus className="w-3 h-3" />
-      </button>
-    </div>
-  );
+function minutesAgo(iso: string) {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  return formatDateTime(iso);
 }
 
-// ── Customer picker ────────────────────────────────────────────────────────
+function TypeIcon({ type }: { type: Order["orderType"] }) {
+  if (type === "delivery") return <Bike className="w-3.5 h-3.5" />;
+  if (type === "dine_in") return <Utensils className="w-3.5 h-3.5" />;
+  return <Store className="w-3.5 h-3.5" />;
+}
 
-function CustomerPicker({
-  value,
-  onChange,
-}: {
-  value: { id: number; name: string } | null;
-  onChange: (c: { id: number; name: string } | null) => void;
+// Buttons that move an order to its next status
+function StatusActions({ order, onUpdate, busy, size = "default" }: {
+  order: Order;
+  onUpdate: (status: OrderStatus, paymentMethod?: "cash" | "card") => void;
+  busy: boolean;
+  size?: "default" | "sm";
 }) {
-  const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
-  const { data } = useListCustomers({ search: search || undefined, limit: 8 });
+  const [completing, setCompleting] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const h = size === "sm" ? "h-10" : "h-11";
+  if (order.status === "completed" || order.status === "cancelled") return null;
+  const payInPerson = order.paymentMethod === "pay_on_pickup" || order.paymentMethod === "pay_on_delivery";
 
-  const handleSelect = (c: { id: number; name: string }) => {
-    onChange(c);
-    setSearch("");
-    setOpen(false);
-  };
+  if (completing) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-muted-foreground">Paid by:</span>
+        <Button className={h} disabled={busy} onClick={() => onUpdate("completed", "cash")}><Banknote className="w-4 h-4 mr-1" /> Cash</Button>
+        <Button className={h} disabled={busy} onClick={() => onUpdate("completed", "card")}><CreditCard className="w-4 h-4 mr-1" /> Card</Button>
+        <Button variant="ghost" className={h} onClick={() => setCompleting(false)}>Back</Button>
+      </div>
+    );
+  }
+  if (confirmCancel) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-destructive">Cancel this order?</span>
+        <Button variant="destructive" className={h} disabled={busy} onClick={() => onUpdate("cancelled")}>Yes, cancel</Button>
+        <Button variant="ghost" className={h} onClick={() => setConfirmCancel(false)}>Keep</Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative">
-      {value ? (
-        <div className="flex items-center justify-between px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center">
-              <User className="w-3.5 h-3.5 text-primary" />
-            </div>
-            <span className="text-sm font-semibold text-foreground">{value.name}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="text-muted-foreground hover:text-destructive transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ) : (
-        <div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Search customer name or email..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
-              onFocus={() => setOpen(true)}
-              className="pl-9 text-sm h-9"
-            />
-          </div>
-          {open && (
-            <div className="absolute z-20 mt-1 w-full bg-card border border-border rounded-lg shadow-xl overflow-hidden">
-              {!data?.customers?.length ? (
-                <div className="p-3 text-sm text-muted-foreground text-center">
-                  {search ? "No customers found" : "Type to search customers"}
-                </div>
-              ) : (
-                data.customers.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onMouseDown={() => handleSelect({ id: c.id, name: c.name })}
-                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-primary/5 text-left transition-colors border-b border-border/50 last:border-0"
-                  >
-                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <User className="w-3.5 h-3.5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">{c.email || c.phone || "No contact"}</p>
-                    </div>
-                    <Badge className="ml-auto capitalize text-[10px]" variant="outline">{c.loyaltyTier}</Badge>
-                  </button>
-                ))
-              )}
-              <button
-                type="button"
-                onMouseDown={() => { onChange(null); setOpen(false); }}
-                className="w-full py-2 text-xs text-muted-foreground hover:text-foreground transition-colors border-t border-border"
-              >
-                Continue without linking a customer
-              </button>
-            </div>
-          )}
-        </div>
+    <div className="flex flex-wrap items-center gap-2">
+      {order.status === "pending" && <Button className={`${h} font-bold`} disabled={busy} onClick={() => onUpdate("preparing")}>Accept & prepare</Button>}
+      {order.status === "preparing" && (
+        <Button className={`${h} font-bold`} disabled={busy} onClick={() => onUpdate("ready")}>
+          {order.orderType === "delivery" ? "Out for delivery" : "Mark ready"}
+        </Button>
       )}
+      {(order.status === "ready" || order.status === "preparing") && (
+        <Button
+          variant={order.status === "ready" ? "default" : "outline"}
+          className={`${h} font-bold`}
+          disabled={busy}
+          onClick={() => (payInPerson ? setCompleting(true) : onUpdate("completed"))}
+        >
+          Complete
+        </Button>
+      )}
+      <Button variant="ghost" className={`${h} text-muted-foreground hover:text-destructive`} disabled={busy} onClick={() => setConfirmCancel(true)}>
+        Cancel
+      </Button>
     </div>
   );
 }
 
-// ── Main Orders Page ───────────────────────────────────────────────────────
+function OrderCard({ order, onOpen, onUpdate, busy }: {
+  order: Order;
+  onOpen: () => void;
+  onUpdate: (status: OrderStatus, paymentMethod?: "cash" | "card") => void;
+  busy: boolean;
+}) {
+  const isNew = order.status === "pending";
+  return (
+    <div className={`bg-card rounded-xl border-2 p-4 flex flex-col gap-3 ${isNew ? "border-secondary shadow-md" : "border-border"}`}>
+      <button type="button" onClick={onOpen} className="text-left">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-lg font-black text-foreground">#{order.id}</span>
+          <Badge className={`${STATUS_CLASSES[order.status]} border-0`}>{orderStatusLabel(order.status, order.orderType)}</Badge>
+          <Badge variant="outline" className="gap-1">
+            <TypeIcon type={order.orderType} />
+            {order.orderType ? ORDER_TYPE_LABELS[order.orderType] : "Order"}
+            {order.tableLabel ? ` · ${order.tableLabel}` : ""}
+          </Badge>
+          <Badge variant="outline" className={order.source === "online" ? "border-primary text-primary" : ""}>
+            {order.source === "online" ? "Online" : "POS"}
+          </Badge>
+          <span className="ml-auto text-xs text-muted-foreground">{minutesAgo(order.createdAt)}</span>
+        </div>
+        {(order.customerName || order.customer) && (
+          <p className="text-sm font-semibold text-foreground mt-2">
+            {order.customerName ?? order.customer?.name}
+            {order.customerPhone && <span className="font-normal text-muted-foreground"> · {order.customerPhone}</span>}
+          </p>
+        )}
+        {order.deliveryAddress && (
+          <p className="text-xs text-muted-foreground mt-0.5 flex items-start gap-1"><MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" />{order.deliveryAddress}</p>
+        )}
+        <ul className="mt-2 space-y-0.5 text-sm">
+          {order.items.map((it) => (
+            <li key={it.id}>
+              <span className="font-bold">{it.quantity}×</span> {it.itemName}
+              {it.options.length > 0 && <span className="text-xs text-muted-foreground"> ({it.options.map((o) => o.choice).join(", ")})</span>}
+            </li>
+          ))}
+        </ul>
+        {order.notes && <p className="mt-2 text-xs bg-accent/20 rounded px-2 py-1 text-foreground">Note: {order.notes}</p>}
+        <div className="flex items-baseline justify-between mt-3">
+          <span className="text-xs text-muted-foreground">{order.paymentMethod ? PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod : ""}</span>
+          <span className="text-xl font-black text-primary tabular-nums">{money(order.totalAmount)}</span>
+        </div>
+      </button>
+      <StatusActions order={order} onUpdate={onUpdate} busy={busy} size="sm" />
+    </div>
+  );
+}
 
 export function AdminOrdersPage() {
-  const [cart, setCart] = useState<Record<string, CartItem>>({});
-  const [customer, setCustomer] = useState<{ id: number; name: string } | null>(null);
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings } = usePublicSettings();
+  const [tab, setTab] = useState<Tab>("active");
+  const [source, setSource] = useState<"all" | "online" | "pos">("all");
+  const [search, setSearch] = useState("");
+  const [date, setDate] = useState("");
+  const [page, setPage] = useState(1);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
-  const cartKey = (cat: string, name: string) => `${cat}::${name}`;
+  const params = new URLSearchParams({ status: tab, source, page: String(page), limit: tab === "active" ? "50" : "20" });
+  if (search.trim()) params.set("search", search.trim());
+  if (date) params.set("date", date);
 
-  const getQty = (cat: string, name: string) => cart[cartKey(cat, name)]?.quantity ?? 0;
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["admin-orders", tab, source, search.trim(), date, page],
+    queryFn: () => apiFetch<OrdersResponse>(`/orders?${params}`),
+    refetchInterval: tab === "active" ? 10_000 : false,
+    placeholderData: keepPreviousData,
+  });
 
-  const setQty = (item: MenuItem, cat: string, delta: number) => {
-    const key = cartKey(cat, item.name);
-    setCart((prev) => {
-      const current = prev[key]?.quantity ?? 0;
-      const next = Math.max(0, current + delta);
-      if (next === 0) {
-        const { [key]: _, ...rest } = prev;
-        return rest;
-      }
-      return {
-        ...prev,
-        [key]: {
-          itemName: item.name,
-          itemCategory: cat,
-          quantity: next,
-          unitPrice: item.price,
-          lineTotal: next * item.price,
-        },
-      };
-    });
-  };
+  const selected = data?.orders.find((o) => o.id === selectedId) ?? null;
 
-  const cartItems = Object.values(cart);
-  const subtotal = cartItems.reduce((s, i) => s + i.lineTotal, 0);
-  const totalItems = cartItems.reduce((s, i) => s + i.quantity, 0);
-
-  const handleSubmit = async () => {
-    if (cartItems.length === 0) return;
-    setSubmitting(true);
+  const updateStatus = async (order: Order, status: OrderStatus, paymentMethod?: "cash" | "card") => {
+    setBusyId(order.id);
     try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          customerId: customer?.id ?? null,
-          items: cartItems,
-          notes: notes || null,
-          status: "completed",
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to place order");
-      }
-      setSuccess(true);
-      setCart({});
-      setCustomer(null);
-      setNotes("");
-      setTimeout(() => setSuccess(false), 3000);
-      toast({ title: "Order placed successfully!" });
-    } catch (err: any) {
-      toast({ title: "Error placing order", description: err.message, variant: "destructive" });
+      await apiFetch(`/orders/${order.id}/status`, { method: "PATCH", body: { status, paymentMethod } });
+      await queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-stats-today"] });
+      toast({ title: `Order #${order.id} — ${orderStatusLabel(status, order.orderType)}` });
+    } catch (err) {
+      toast({ title: "Couldn't update order", description: errorMessage(err), variant: "destructive" });
     } finally {
-      setSubmitting(false);
+      setBusyId(null);
     }
   };
 
-  // Only menu sections that have priced items
-  const menuSections = menuData.filter((s) => s.items.some((i) => i.price > 0));
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "active", label: "Active" },
+    { key: "completed", label: "Completed" },
+    { key: "cancelled", label: "Cancelled" },
+    { key: "all", label: "All orders" },
+  ];
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
-
-      {/* ── Left: Menu ── */}
-      <div className="flex-1 space-y-6 lg:overflow-y-auto lg:max-h-[calc(100vh-100px)] lg:pr-1">
+    <div className="space-y-5 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h1 className="text-2xl font-serif font-bold text-foreground">New Order</h1>
-          <p className="text-sm text-muted-foreground mt-1">Select items from the menu, then confirm on the right.</p>
+          <h1 className="text-3xl font-serif font-bold text-foreground mb-1">Orders</h1>
+          <p className="text-muted-foreground">Online orders arrive here automatically. This page refreshes every few seconds.</p>
         </div>
+        <Button className="h-11" onClick={() => setLocation("/admin/pos")}>
+          <Calculator className="w-4 h-4 mr-2" /> New sale (POS)
+        </Button>
+      </div>
 
-        {menuSections.map((section) => (
-          <Card key={section.category} className="border-border bg-card">
-            <CardHeader className="pb-3 pt-4 px-5">
-              <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary inline-block" />
-                {section.category}
-              </CardTitle>
-              {section.callout && (
-                <p className="text-xs text-primary font-semibold">{section.callout}</p>
-              )}
-            </CardHeader>
-            <CardContent className="px-5 pb-4 space-y-1">
-              {section.items.map((item) => {
-                const qty = getQty(section.category, item.name);
-                return (
-                  <div
-                    key={item.name}
-                    className={`flex items-center gap-3 py-2.5 px-3 rounded-lg transition-colors ${qty > 0 ? "bg-primary/5 border border-primary/15" : "hover:bg-muted/50"}`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-foreground truncate">{item.name}</span>
-                        {item.isNew && (
-                          <Badge className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0 h-4">NEW</Badge>
-                        )}
-                      </div>
-                      {item.desc && (
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{item.desc}</p>
-                      )}
-                    </div>
-                    <span className="text-sm font-bold text-primary tabular-nums flex-shrink-0">
-                      ${item.price.toFixed(2)}
-                    </span>
-                    <QtyControl
-                      qty={qty}
-                      onInc={() => setQty(item, section.category, 1)}
-                      onDec={() => setQty(item, section.category, -1)}
-                    />
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
+      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => { setTab(t.key); setPage(1); }}
+            className={`h-10 px-4 rounded-full text-sm font-bold whitespace-nowrap border-2 transition-colors ${
+              tab === t.key ? "bg-primary border-primary text-primary-foreground" : "bg-card border-border text-foreground hover:border-primary/50"
+            }`}
+          >
+            {t.label}
+          </button>
         ))}
       </div>
 
-      {/* ── Right: Order Summary ── */}
-      <div className="w-full lg:w-80 lg:flex-shrink-0 flex flex-col gap-4 lg:overflow-y-auto lg:max-h-[calc(100vh-100px)]">
-
-        {/* Success flash */}
-        {success && (
-          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-center gap-3 text-green-600">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            <p className="text-sm font-semibold">Order placed!</p>
-          </div>
-        )}
-
-        {/* Cart */}
-        <Card className="border-border bg-card">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-base font-bold flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4 text-primary" />
-              Order Summary
-              {totalItems > 0 && (
-                <Badge className="ml-auto bg-primary text-primary-foreground text-xs">{totalItems} items</Badge>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            {cartItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Add items from the menu</p>
-            ) : (
-              <div className="space-y-2">
-                {cartItems.map((item) => (
-                  <div key={`${item.itemCategory}::${item.itemName}`} className="flex items-start justify-between gap-2 text-sm">
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium text-foreground truncate block">{item.itemName}</span>
-                      <span className="text-xs text-muted-foreground">{item.quantity} × ${item.unitPrice.toFixed(2)}</span>
-                    </div>
-                    <span className="font-bold text-foreground tabular-nums">${item.lineTotal.toFixed(2)}</span>
-                  </div>
-                ))}
-                <div className="border-t border-border mt-3 pt-3 flex justify-between font-bold">
-                  <span className="text-foreground">Total</span>
-                  <span className="text-primary text-lg">${subtotal.toFixed(2)}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCart({})}
-                  className="text-xs text-muted-foreground hover:text-destructive transition-colors mt-1"
-                >
-                  Clear order
-                </button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Customer */}
-        <Card className="border-border bg-card">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-              <User className="w-4 h-4 text-primary" />
-              Link Customer
-              <span className="text-xs font-normal text-muted-foreground ml-auto">Optional</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <CustomerPicker value={customer} onChange={setCustomer} />
-            {customer && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Loyalty points and order stats will be updated automatically.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Notes */}
-        <Card className="border-border bg-card">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold text-foreground">Notes</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <textarea
-              className="w-full text-sm bg-background border border-border rounded-lg p-3 resize-none text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              rows={3}
-              placeholder="Special requests, allergies, table number..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Submit */}
-        <Button
-          className="w-full h-12 text-sm font-bold"
-          disabled={cartItems.length === 0 || submitting}
-          onClick={handleSubmit}
-          data-testid="place-order-btn"
-        >
-          {submitting ? (
-            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Placing Order...</>
-          ) : (
-            <>Place Order · ${subtotal.toFixed(2)}</>
-          )}
-        </Button>
+      <div className="flex flex-col md:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-9 bg-card h-10" placeholder="Search by order #, name or phone…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
+        <Select value={source} onValueChange={(v) => { setSource(v as typeof source); setPage(1); }}>
+          <SelectTrigger className="md:w-40 bg-card h-10"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            <SelectItem value="online">Online</SelectItem>
+            <SelectItem value="pos">POS</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex gap-1 items-center">
+          <Input type="date" className="bg-card h-10 md:w-44" value={date} onChange={(e) => { setDate(e.target.value); setPage(1); }} aria-label="Filter by date" />
+          {date && <Button variant="ghost" size="icon" onClick={() => setDate("")} aria-label="Clear date"><X className="w-4 h-4" /></Button>}
+        </div>
       </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-24"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+      ) : !data?.orders.length ? (
+        <div className="text-center py-20 text-muted-foreground">
+          {tab === "active" ? "No active orders right now. New online orders will appear here automatically." : "No orders found."}
+        </div>
+      ) : (
+        <div className={`grid gap-3 ${tab === "active" ? "md:grid-cols-2 2xl:grid-cols-3" : "md:grid-cols-2"} ${isFetching ? "opacity-90" : ""}`}>
+          {data.orders.map((o) => (
+            <OrderCard key={o.id} order={o} onOpen={() => setSelectedId(o.id)} onUpdate={(s, pm) => updateStatus(o, s, pm)} busy={busyId === o.id} />
+          ))}
+        </div>
+      )}
+
+      {data && data.totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Page {data.page} of {data.totalPages} · {data.total} orders</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}><ChevronLeft className="w-4 h-4" /></Button>
+            <Button variant="outline" size="sm" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}><ChevronRight className="w-4 h-4" /></Button>
+          </div>
+        </div>
+      )}
+
+      {/* Order details */}
+      <Dialog open={selected !== null} onOpenChange={(o) => !o && setSelectedId(null)}>
+        <DialogContent className="bg-card sm:max-w-lg max-h-[92vh] overflow-y-auto">
+          {selected && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="font-serif text-2xl text-primary flex items-center gap-3">
+                  Order #{selected.id}
+                  <Badge className={`${STATUS_CLASSES[selected.status]} border-0 font-sans`}>{orderStatusLabel(selected.status, selected.orderType)}</Badge>
+                </DialogTitle>
+              </DialogHeader>
+              {(selected.customerPhone || selected.customerEmail) && (
+                <div className="flex flex-wrap gap-2 text-sm">
+                  {selected.customerPhone && (
+                    <a href={`tel:${selected.customerPhone}`} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 font-semibold hover:border-primary">
+                      <Phone className="w-4 h-4 text-primary" /> {selected.customerPhone}
+                    </a>
+                  )}
+                  {selected.customerEmail && <span className="inline-flex items-center rounded-lg border border-border px-3 py-2">{selected.customerEmail}</span>}
+                </div>
+              )}
+              <div className="border border-border rounded-xl p-4 bg-white">
+                <Receipt order={selected} settings={settings} title={selected.source === "online" ? "Online order" : "Receipt"} />
+              </div>
+              <PrintPortal>
+                <Receipt order={selected} settings={settings} title={selected.source === "online" ? "Online order" : "Receipt"} />
+              </PrintPortal>
+              <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between">
+                <Button variant="outline" className="h-11" onClick={() => window.print()}>
+                  <Printer className="w-4 h-4 mr-2" /> Print
+                </Button>
+                <StatusActions order={selected} onUpdate={(s, pm) => updateStatus(selected, s, pm)} busy={busyId === selected.id} />
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

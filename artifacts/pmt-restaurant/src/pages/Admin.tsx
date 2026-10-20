@@ -1,82 +1,51 @@
-import { useLocation, Route, Switch } from "wouter";
-import { Show } from "@clerk/react";
-import { useGetAdminMe, useGetStatsOverview, getGetAdminMeQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Users, Receipt, TrendingUp, AlertTriangle, LogOut, ChevronRight, ShoppingBag, Menu, X, UtensilsCrossed } from "lucide-react";
-import { useClerk, useUser } from "@clerk/react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, Route, Switch, Redirect } from "wouter";
+import { useGetStatsOverview } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Loader2, Users, Receipt, TrendingUp, LogOut, ChevronRight, ShoppingBag, Menu, X, UtensilsCrossed,
+  CalendarDays, Calculator, Settings as SettingsIcon, Clock, Bell,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import { useStaffAuthActions, useStaffUser } from "@/hooks/useStaffAuth";
+import { apiFetch } from "@/lib/api";
+import { money } from "@/lib/format";
 import { CustomerList } from "./AdminCustomers";
 import { AdminOrdersPage } from "./AdminOrders";
 import { AdminMenu } from "./AdminMenu";
+import { AdminPOS } from "./AdminPOS";
+import { AdminReservations } from "./AdminReservations";
+import { AdminSettings } from "./AdminSettings";
+
+type NotificationCounts = {
+  newOrders: number;
+  latestNewOrderId: number;
+  pendingReservations: number;
+  latestPendingReservationId: number;
+  reservationsToday: number;
+};
 
 export default function AdminRouter() {
-  const [, setLocation] = useLocation();
+  const [location] = useLocation();
+  const { data: user, isLoading } = useStaffUser();
 
-  return (
-    <Show 
-      when="signed-in" 
-      fallback={<div className="h-screen bg-background flex items-center justify-center text-primary"><Loader2 className="animate-spin w-8 h-8" /></div>}
-    >
-      <AdminGuard>
-        <AdminLayout>
-          <Switch>
-            <Route path="/admin" component={AdminDashboard} />
-            <Route path="/admin/customers" component={CustomerList} />
-            <Route path="/admin/orders" component={AdminOrdersPage} />
-            <Route path="/admin/menu" component={AdminMenu} />
-          </Switch>
-        </AdminLayout>
-      </AdminGuard>
-    </Show>
-  );
-}
-
-// Ensure the user is an admin
-function AdminGuard({ children }: { children: React.ReactNode }) {
-  const { data: adminMe, isLoading, error } = useGetAdminMe({
-    query: {
-      retry: false,
-      queryKey: getGetAdminMeQueryKey(),
+  // Keep the admin area out of search engines
+  useEffect(() => {
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "robots";
+      document.head.appendChild(meta);
     }
-  });
-
-  const [claiming, setClaiming] = useState(false);
-  const [claimError, setClaimError] = useState("");
-  const { user } = useUser();
-  const queryClient = useQueryClient();
-
-  const handleClaim = async () => {
-    if (!user) return;
-    setClaiming(true);
-    setClaimError("");
-    
-    try {
-      const res = await fetch('/api/admin/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          email: user.primaryEmailAddress?.emailAddress, 
-          name: user.fullName 
-        })
-      });
-      
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to claim admin access");
-      }
-      
-      // Invalidate the query to trigger a reload of admin status
-      await queryClient.invalidateQueries({ queryKey: getGetAdminMeQueryKey() });
-    } catch (err: any) {
-      setClaimError(err.message);
-    } finally {
-      setClaiming(false);
-    }
-  };
+    const previous = meta.content;
+    meta.content = "noindex, nofollow";
+    return () => {
+      meta!.content = previous;
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -86,69 +55,130 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Not an admin or errored out
-  if (error || !adminMe?.isAdmin) {
-    return (
-      <div className="h-screen bg-background flex items-center justify-center p-4">
-        <Card className="max-w-md w-full border-border/50 shadow-2xl">
-          <CardHeader className="text-center pb-2">
-            <div className="mx-auto w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
-              <AlertTriangle className="w-6 h-6 text-destructive" />
-            </div>
-            <CardTitle className="text-2xl font-serif">Admin Access Required</CardTitle>
-            <CardDescription className="text-base mt-2">
-              Your account doesn't have admin access yet. Claim it now (up to 2 admin accounts allowed).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            {claimError && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4 border border-destructive/20">
-                {claimError}
-              </div>
-            )}
-            <Button 
-              className="w-full h-12 text-base font-bold" 
-              onClick={handleClaim}
-              disabled={claiming}
-            >
-              {claiming ? <Loader2 className="animate-spin mr-2" /> : null}
-              Claim Admin Access
-            </Button>
-            <div className="mt-6 text-center">
-              <Button variant="link" className="text-muted-foreground" onClick={() => window.location.href = '/'}>
-                Return to Homepage
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  if (!user) return <Redirect to={`/admin/login?next=${encodeURIComponent(location)}`} replace />;
 
-  return <>{children}</>;
+  return (
+    <AdminLayout>
+      <Switch>
+        <Route path="/admin" component={AdminDashboard} />
+        <Route path="/admin/pos" component={AdminPOS} />
+        <Route path="/admin/orders" component={AdminOrdersPage} />
+        <Route path="/admin/reservations" component={AdminReservations} />
+        <Route path="/admin/menu" component={AdminMenu} />
+        <Route path="/admin/customers" component={CustomerList} />
+        <Route path="/admin/settings" component={AdminSettings} />
+        <Route><Redirect to="/admin" /></Route>
+      </Switch>
+    </AdminLayout>
+  );
+}
+
+// Short two-note chime made with Web Audio (no sound file needed)
+function playChime() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctx();
+    [880, 1318].forEach((freq, i) => {
+      const start = ctx.currentTime + i * 0.18;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.4);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.45);
+    });
+    setTimeout(() => ctx.close(), 1200);
+  } catch {
+    // audio not available — the toast is still shown
+  }
+}
+
+// Polls for new online orders / reservation requests and alerts staff.
+function useAdminNotifications() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+  const seen = useRef<{ order: number; reservation: number } | null>(null);
+
+  const { data } = useQuery({
+    queryKey: ["admin-notifications"],
+    queryFn: () => apiFetch<NotificationCounts>("/admin/notifications/counts"),
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (!data) return;
+    const prev = seen.current;
+    seen.current = { order: data.latestNewOrderId, reservation: data.latestPendingReservationId };
+    if (!prev) return; // first load: nothing is "new" yet
+
+    const newOrder = data.latestNewOrderId > prev.order;
+    const newReservation = data.latestPendingReservationId > prev.reservation;
+    if (newOrder) {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      toast({
+        title: `New online order #${data.latestNewOrderId}`,
+        description: "Open Orders to accept it.",
+        action: (
+          <ToastAction altText="View orders" onClick={() => setLocation("/admin/orders")}>
+            View
+          </ToastAction>
+        ),
+      });
+    }
+    if (newReservation) {
+      queryClient.invalidateQueries({ queryKey: ["admin-reservations"] });
+      if (!newOrder) {
+        toast({ title: "New reservation request", description: "Open Reservations to approve it." });
+      }
+    }
+    if (newOrder || newReservation) playChime();
+  }, [data, queryClient, toast, setLocation]);
+
+  // Show waiting items in the browser tab title
+  useEffect(() => {
+    const waiting = (data?.newOrders ?? 0) + (data?.pendingReservations ?? 0);
+    document.title = waiting > 0 ? `(${waiting}) PMT Admin` : "PMT Admin";
+  }, [data]);
+
+  return data;
 }
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
-  const { signOut } = useClerk();
+  const { data: user } = useStaffUser();
+  const { logout } = useStaffAuthActions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const counts = useAdminNotifications();
+  const isPOS = location.startsWith("/admin/pos");
 
   const navigate = (path: string) => {
     setLocation(path);
     setSidebarOpen(false);
   };
 
-  const navBtn = (path: string, label: string, Icon: any) => {
+  const navBtn = (path: string, label: string, Icon: React.ComponentType<{ className?: string }>, badge?: number) => {
     const active = path === '/admin' ? location === '/admin' : location.startsWith(path);
     return (
       <button
         className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-          active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+          active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
         }`}
         onClick={() => navigate(path)}
       >
         <Icon className="w-5 h-5" />
         {label}
+        {!!badge && (
+          <span className="ml-auto min-w-6 h-6 px-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-bold flex items-center justify-center">
+            {badge}
+          </span>
+        )}
       </button>
     );
   };
@@ -171,26 +201,38 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
         transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="h-16 flex items-center justify-between px-6 border-b border-border">
-          <div className="font-serif text-2xl font-bold tracking-tighter text-primary">
-            PMT <span className="text-sm font-sans text-muted-foreground ml-2 font-normal uppercase tracking-widest">Admin</span>
+        <div className="h-16 flex items-center justify-between px-5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <img src={`${import.meta.env.BASE_URL}logo.webp`} alt="Papa's Mia Tacos" width={52} height={48} className="h-12 w-auto" />
+            <span className="text-sm text-muted-foreground font-semibold uppercase tracking-widest">Admin</span>
           </div>
-          <button className="lg:hidden p-1 text-muted-foreground hover:text-foreground" onClick={() => setSidebarOpen(false)}>
+          <button className="lg:hidden p-1 text-muted-foreground hover:text-foreground" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
+        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
           {navBtn('/admin', 'Dashboard', TrendingUp)}
-          {navBtn('/admin/customers', 'Customers', Users)}
-          {navBtn('/admin/orders', 'Orders', ShoppingBag)}
+          {navBtn('/admin/pos', 'POS / Cashier', Calculator)}
+          {navBtn('/admin/orders', 'Orders', ShoppingBag, counts?.newOrders)}
+          {navBtn('/admin/reservations', 'Reservations', CalendarDays, counts?.pendingReservations)}
           {navBtn('/admin/menu', 'Menu & Pricing', UtensilsCrossed)}
+          {navBtn('/admin/customers', 'Customers', Users)}
+          {navBtn('/admin/settings', 'Settings', SettingsIcon)}
         </div>
 
         <div className="p-4 border-t border-border">
+          {user && (
+            <p className="px-4 pb-2 text-xs text-muted-foreground truncate">
+              Signed in as <span className="font-semibold text-foreground">{user.displayName}</span>
+            </p>
+          )}
           <button
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-            onClick={() => signOut({ redirectUrl: '/' })}
+            onClick={async () => {
+              await logout();
+              setLocation('/admin/login');
+            }}
           >
             <LogOut className="w-5 h-5" />
             Log Out
@@ -203,16 +245,29 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
         {/* Mobile top bar */}
         <div className="lg:hidden h-14 flex items-center justify-between px-4 border-b border-border bg-card flex-shrink-0">
           <button
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="font-serif text-xl font-bold text-primary">PMT Admin</div>
-          <div className="w-9" /> {/* spacer */}
+          <div className="flex items-center gap-2">
+            <img src={`${import.meta.env.BASE_URL}logo.webp`} alt="Papa's Mia Tacos" width={43} height={40} className="h-10 w-auto" />
+            <span className="text-xs text-muted-foreground font-semibold uppercase tracking-widest">Admin</span>
+          </div>
+          <button
+            className="relative p-2 rounded-lg text-muted-foreground"
+            onClick={() => navigate((counts?.newOrders ?? 0) > 0 ? '/admin/orders' : '/admin/reservations')}
+            aria-label="Waiting orders and reservations"
+          >
+            <Bell className="w-5 h-5" />
+            {((counts?.newOrders ?? 0) + (counts?.pendingReservations ?? 0)) > 0 && (
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-secondary" />
+            )}
+          </button>
         </div>
 
-        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-8">
+        <main className={`flex-1 overflow-y-auto bg-background ${isPOS ? 'p-2 md:p-4' : 'p-4 md:p-8'}`}>
           {children}
         </main>
       </div>
@@ -220,8 +275,25 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+type TodayStats = {
+  date: string;
+  salesToday: number;
+  completedOrdersToday: number;
+  ordersToday: number;
+  ordersWaiting: number;
+  ordersInProgress: number;
+  reservationsToday: number;
+  guestsToday: number;
+  pendingReservations: number;
+};
+
 function AdminDashboard() {
   const { data: stats, isLoading } = useGetStatsOverview();
+  const { data: today } = useQuery({
+    queryKey: ["admin-stats-today"],
+    queryFn: () => apiFetch<TodayStats>("/stats/today"),
+    refetchInterval: 30_000,
+  });
   const [, setLocation] = useLocation();
 
   if (isLoading) {
@@ -232,42 +304,80 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-serif font-bold tracking-tight text-white mb-1">Dashboard</h1>
+          <h1 className="text-3xl font-serif font-bold tracking-tight text-foreground mb-1">Dashboard</h1>
           <p className="text-muted-foreground">Overview of restaurant performance and customer base.</p>
         </div>
-        <Button onClick={() => setLocation('/admin/customers')}>
-          Manage Customers <ChevronRight className="w-4 h-4 ml-2" />
+        <Button onClick={() => setLocation('/admin/pos')} className="h-11">
+          <Calculator className="w-4 h-4 mr-2" /> Open POS
         </Button>
       </div>
 
-      {/* Top Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Total Revenue" 
-          value={`$${stats.totalRevenue.toLocaleString()}`} 
-          icon={<Receipt className="w-5 h-5 text-primary" />} 
-          trend="+12% from last month"
-          trendUp
-        />
-        <StatCard 
-          title="Total Orders" 
-          value={stats.totalOrders.toLocaleString()} 
-          icon={<TrendingUp className="w-5 h-5 text-primary" />} 
-        />
-        <StatCard 
-          title="Total Customers" 
-          value={stats.totalCustomers.toLocaleString()} 
-          icon={<Users className="w-5 h-5 text-primary" />} 
-          trend={`+${stats.newCustomersThisMonth} this month`}
-          trendUp
-        />
-        <StatCard 
-          title="Active VIPs" 
-          value={stats.vipCustomers.toLocaleString()} 
-          icon={<div className="w-5 h-5 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">VIP</div>} 
-        />
+      {/* Today */}
+      {today && (
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-3">Today</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              title="Sales today"
+              value={money(today.salesToday)}
+              icon={<Receipt className="w-5 h-5 text-primary" />}
+              trend={`${today.completedOrdersToday} completed orders`}
+            />
+            <StatCard
+              title="Orders waiting"
+              value={today.ordersWaiting.toString()}
+              icon={<Bell className="w-5 h-5 text-primary" />}
+              trend={`${today.ordersInProgress} in progress · ${today.ordersToday} today`}
+              highlight={today.ordersWaiting > 0}
+              onClick={() => setLocation('/admin/orders')}
+            />
+            <StatCard
+              title="Reservation requests"
+              value={today.pendingReservations.toString()}
+              icon={<Clock className="w-5 h-5 text-primary" />}
+              trend="Waiting for approval"
+              highlight={today.pendingReservations > 0}
+              onClick={() => setLocation('/admin/reservations')}
+            />
+            <StatCard
+              title="Booked today"
+              value={`${today.guestsToday} guests`}
+              icon={<CalendarDays className="w-5 h-5 text-primary" />}
+              trend={`${today.reservationsToday} confirmed reservations`}
+              onClick={() => setLocation('/admin/reservations')}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* All-time */}
+      <div>
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-3">Customers (all time)</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Total Revenue"
+            value={`$${stats.totalRevenue.toLocaleString()}`}
+            icon={<Receipt className="w-5 h-5 text-primary" />}
+          />
+          <StatCard
+            title="Total Orders"
+            value={stats.totalOrders.toLocaleString()}
+            icon={<TrendingUp className="w-5 h-5 text-primary" />}
+          />
+          <StatCard
+            title="Total Customers"
+            value={stats.totalCustomers.toLocaleString()}
+            icon={<Users className="w-5 h-5 text-primary" />}
+            trend={`+${stats.newCustomersThisMonth} this month`}
+          />
+          <StatCard
+            title="Active VIPs"
+            value={stats.vipCustomers.toLocaleString()}
+            icon={<div className="w-5 h-5 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">VIP</div>}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -278,7 +388,7 @@ function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <TierRow name="Platinum" count={stats.loyaltyTierBreakdown.platinum} total={stats.totalCustomers} color="bg-slate-300" />
+              <TierRow name="Platinum" count={stats.loyaltyTierBreakdown.platinum} total={stats.totalCustomers} color="bg-slate-500" />
               <TierRow name="Gold" count={stats.loyaltyTierBreakdown.gold} total={stats.totalCustomers} color="bg-yellow-500" />
               <TierRow name="Silver" count={stats.loyaltyTierBreakdown.silver} total={stats.totalCustomers} color="bg-slate-400" />
               <TierRow name="Bronze" count={stats.loyaltyTierBreakdown.bronze} total={stats.totalCustomers} color="bg-amber-700" />
@@ -288,28 +398,28 @@ function AdminDashboard() {
 
         <Card className="border-border bg-card">
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest metrics across the business</CardDescription>
+            <CardTitle>Customer Value</CardTitle>
+            <CardDescription>Averages across your customer base</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-6">
-              <div className="flex justify-between items-center p-4 bg-white/5 rounded-lg border border-white/5">
+            <div className="flex flex-col gap-4">
+              <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg border border-border">
                 <div>
                   <p className="text-sm text-muted-foreground">Average Order Value</p>
-                  <p className="text-2xl font-bold text-white">${stats.avgOrderValue.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-foreground">${stats.avgOrderValue.toFixed(2)}</p>
                 </div>
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                   <Receipt className="w-6 h-6 text-primary" />
                 </div>
               </div>
-              <div className="flex justify-between items-center p-4 bg-white/5 rounded-lg border border-white/5">
+              <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg border border-border">
                 <div>
                   <p className="text-sm text-muted-foreground">New Customers (This Month)</p>
-                  <p className="text-2xl font-bold text-white">{stats.newCustomersThisMonth}</p>
+                  <p className="text-2xl font-bold text-foreground">{stats.newCustomersThisMonth}</p>
                 </div>
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Users className="w-6 h-6 text-primary" />
-                </div>
+                <Button variant="outline" size="sm" onClick={() => setLocation('/admin/customers')}>
+                  Customers <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -319,35 +429,43 @@ function AdminDashboard() {
   );
 }
 
-function StatCard({ title, value, icon, trend, trendUp }: any) {
+function StatCard({
+  title, value, icon, trend, highlight, onClick,
+}: {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  trend?: string;
+  highlight?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <Card className="border-border bg-card overflow-hidden">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-4">
+    <Card
+      className={`border-border bg-card overflow-hidden ${onClick ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''} ${highlight ? 'border-secondary border-2' : ''}`}
+      onClick={onClick}
+    >
+      <CardContent className="p-4 md:p-6">
+        <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
             {icon}
           </div>
         </div>
         <div className="flex flex-col gap-1">
-          <h3 className="text-3xl font-bold text-white">{value}</h3>
-          {trend && (
-            <p className={`text-xs font-medium ${trendUp ? 'text-green-500' : 'text-muted-foreground'}`}>
-              {trend}
-            </p>
-          )}
+          <h3 className={`text-2xl md:text-3xl font-bold ${highlight ? 'text-secondary' : 'text-foreground'}`}>{value}</h3>
+          {trend && <p className="text-xs font-medium text-muted-foreground">{trend}</p>}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function TierRow({ name, count, total, color }: any) {
+function TierRow({ name, count, total, color }: { name: string; count: number; total: number; color: string }) {
   const percent = total > 0 ? Math.round((count / total) * 100) : 0;
   return (
     <div className="flex items-center gap-4">
       <div className="w-20 text-sm font-medium">{name}</div>
-      <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden">
+      <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
         <div className={`h-full ${color}`} style={{ width: `${percent}%` }}></div>
       </div>
       <div className="w-16 text-right text-sm text-muted-foreground">{count} ({percent}%)</div>

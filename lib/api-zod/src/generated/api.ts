@@ -18,18 +18,6 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * Returns current authenticated admin user info
- * @summary Get current admin user
- */
-export const GetAdminMeResponse = zod.object({
-  "clerkUserId": zod.string(),
-  "email": zod.string().optional(),
-  "name": zod.string().optional(),
-  "isAdmin": zod.boolean()
-})
-
-
-/**
  * @summary Get dashboard statistics overview
  */
 export const GetStatsOverviewResponse = zod.object({

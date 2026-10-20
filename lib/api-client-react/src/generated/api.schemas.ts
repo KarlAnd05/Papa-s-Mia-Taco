@@ -9,13 +9,6 @@ export interface HealthStatus {
   status: string;
 }
 
-export interface AdminUser {
-  clerkUserId: string;
-  email?: string;
-  name?: string;
-  isAdmin: boolean;
-}
-
 export type StatsOverviewLoyaltyTierBreakdown = {
   bronze: number;
   silver: number;

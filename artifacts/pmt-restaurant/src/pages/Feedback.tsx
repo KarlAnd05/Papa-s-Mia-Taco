@@ -1,25 +1,6 @@
 import { useState } from "react";
-
-// ── Decorative helpers (copied from Home for consistency) ──────────────────
-
-function PapelPicadoBorder() {
-  const colors = ["#0F5D2F", "#F4AA1C", "#A71F29", "#F4AA1C", "#0F5D2F", "#A71F29", "#F4AA1C", "#0F5D2F"];
-  const W = 50, H = 32, count = 32;
-  return (
-    <div style={{ width: "100%", overflow: "hidden", height: H + 8 }}>
-      <svg width={W * count} height={H + 8} style={{ display: "block" }}>
-        <line x1="0" y1="4" x2={W * count} y2="4" stroke="#222" strokeWidth="1.5" opacity="0.3" />
-        {Array.from({ length: count }).map((_, i) => (
-          <polygon
-            key={i}
-            points={`${i * W},0 ${(i + 1) * W},0 ${i * W + W / 2},${H}`}
-            fill={colors[i % colors.length]}
-          />
-        ))}
-      </svg>
-    </div>
-  );
-}
+import { SiteNavbar } from "@/components/site/SiteNavbar";
+import { SiteFooter } from "@/components/site/SiteFooter";
 
 // ── Star rating widget ─────────────────────────────────────────────────────
 
@@ -144,7 +125,7 @@ const inputStyle: React.CSSProperties = {
   border: "2px solid #e0dcd4",
   borderRadius: 8,
   fontFamily: "Montserrat, sans-serif",
-  fontSize: 14,
+  fontSize: 16, // 16px stops phones zooming in when a field is tapped
   color: "#222",
   background: "#fff",
   outline: "none",
@@ -272,29 +253,7 @@ export default function FeedbackPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#F8F5EF", fontFamily: "Montserrat, sans-serif" }}>
-      {/* Papel picado border */}
-      <PapelPicadoBorder />
-
-      {/* Navbar */}
-      <nav style={{
-        background: "#F8F5EF",
-        borderBottom: "2px solid #0F5D2F",
-        padding: "0 24px",
-        height: 64,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
-      }}>
-        <a href="/" style={{ fontFamily: "Playfair Display, serif", fontSize: "1.6rem", fontWeight: 900, color: "#0F5D2F", textDecoration: "none" }}>
-          PMT
-        </a>
-        <a href="/" style={{ fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 600, color: "#0F5D2F", textDecoration: "none", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-          ← Back to Menu
-        </a>
-      </nav>
+      <SiteNavbar />
 
       {/* Header */}
       <div style={{ textAlign: "center", padding: "48px 24px 32px" }}>
@@ -309,7 +268,7 @@ export default function FeedbackPage() {
           <polyline points="0,10 12,2 24,10 36,2 48,10 60,2 72,10 84,2 96,10 108,2 120,10 132,2 144,10 156,2 168,10 180,2 192,10 204,2 216,10 228,2 240,10" fill="none" stroke="#F4AA1C" strokeWidth="2.5" />
         </svg>
         <p style={{ fontFamily: "Montserrat, sans-serif", fontSize: 15, color: "#555", maxWidth: 520, margin: "0 auto" }}>
-          Your feedback helps us serve Montreal better. Every review is read by our team — gracias!
+          Your feedback helps us serve you better. Every review is read by our team — gracias!
         </p>
       </div>
 
@@ -377,7 +336,7 @@ export default function FeedbackPage() {
               <Field label="Phone Number">
                 <input
                   type="tel"
-                  placeholder="+1 514 000 0000"
+                  placeholder="+961 70 000 000"
                   value={form.phone}
                   onChange={inp("phone")}
                   style={inputStyle}
@@ -520,8 +479,7 @@ export default function FeedbackPage() {
         </form>
       )}
 
-      {/* Bottom papel picado */}
-      <PapelPicadoBorder />
+      <SiteFooter />
     </div>
   );
 }

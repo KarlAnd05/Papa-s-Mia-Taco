@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { feedbackTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
+import { requireStaff } from "../lib/auth";
 
 const router = Router();
 
@@ -38,22 +39,11 @@ router.post("/feedback", async (req, res) => {
     improvements: improvements || null,
   }).returning();
 
-  res.status(201).json({ success: true, id: row.id });
+  return res.status(201).json({ success: true, id: row.id });
 });
 
-// GET /feedback — admin only (simple auth check via Clerk)
-router.get("/feedback", async (req, res) => {
-  const { auth } = req as any;
-  if (!auth?.userId) return res.status(401).json({ error: "Unauthorized" });
-
-  // Check admin table
-  const { adminsTable } = await import("@workspace/db");
-  const { eq } = await import("drizzle-orm");
-  const admin = await db.query.adminsTable.findFirst({
-    where: eq(adminsTable.clerkUserId, auth.userId),
-  });
-  if (!admin) return res.status(403).json({ error: "Admin access required" });
-
+// GET /feedback — staff only
+router.get("/feedback", requireStaff, async (_req, res) => {
   const rows = await db.select().from(feedbackTable).orderBy(desc(feedbackTable.createdAt));
   res.json({ feedback: rows, total: rows.length });
 });

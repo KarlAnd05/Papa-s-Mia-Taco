@@ -7,22 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
-type MenuItem = {
-  id: number;
-  category: string;
-  sortOrder: number;
-  name: string;
-  description: string | null;
-  price: number;
-  note: string | null;
-  callout: string | null;
-  boost: string | null;
-  isNew: boolean;
-  isAvailable: boolean;
-};
+import { useQueryClient } from "@tanstack/react-query";
+import { MENU_QUERY_KEY } from "@/hooks/useMenu";
+import type { MenuItem, MenuOptionGroup } from "@/lib/types";
 
 // ── Inline Price Editor ────────────────────────────────────────────────────
 
@@ -31,7 +18,7 @@ function InlinePriceEditor({
   onSave,
 }: {
   item: MenuItem;
-  onSave: (id: number, updates: Partial<MenuItem>) => Promise<void>;
+  onSave: (id: number, updates: Partial<MenuItem>) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(item.price.toFixed(2));
@@ -77,22 +64,66 @@ function InlinePriceEditor({
 
 // ── Item Edit Dialog ───────────────────────────────────────────────────────
 
-const CATEGORIES = [
-  "Appetizers", "Tacos", "Burritos", "Burrito Bowls",
-  "Salads & Shakers", "Quesadillas", "The Taco Bar",
-  "Dessert", "Dips & Sides", "Drinks",
-];
+const newId = () => Math.random().toString(36).slice(2, 10);
+
+// Edit the option groups of an item (sizes, add-ons, sauces). Prices are added to the item price.
+function OptionsEditor({ value, onChange }: { value: MenuOptionGroup[]; onChange: (v: MenuOptionGroup[]) => void }) {
+  const update = (i: number, patch: Partial<MenuOptionGroup>) => onChange(value.map((g, j) => (j === i ? { ...g, ...patch } : g)));
+  return (
+    <div className="space-y-3">
+      {value.map((group, gi) => (
+        <div key={group.id} className="rounded-lg border border-border bg-background p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input className="h-9 flex-1 min-w-40" placeholder="Group name, e.g. Size" value={group.name} onChange={(e) => update(gi, { name: e.target.value })} />
+            <Select value={group.type} onValueChange={(v) => update(gi, { type: v as MenuOptionGroup["type"] })}>
+              <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="single">Pick one</SelectItem>
+                <SelectItem value="multiple">Pick any</SelectItem>
+              </SelectContent>
+            </Select>
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" className="accent-primary w-4 h-4" checked={group.required} onChange={(e) => update(gi, { required: e.target.checked })} />
+              Required
+            </label>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onChange(value.filter((_, j) => j !== gi))} aria-label="Remove group">
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+          {group.choices.map((choice, ci) => (
+            <div key={choice.id} className="flex items-center gap-2 pl-3">
+              <Input className="h-8 flex-1" placeholder="Choice, e.g. Large" value={choice.name} onChange={(e) => update(gi, { choices: group.choices.map((c, k) => (k === ci ? { ...c, name: e.target.value } : c)) })} />
+              <span className="text-xs text-muted-foreground">+$</span>
+              <Input className="h-8 w-20" type="number" min="0" step="0.05" value={choice.price} onChange={(e) => update(gi, { choices: group.choices.map((c, k) => (k === ci ? { ...c, price: parseFloat(e.target.value) || 0 } : c)) })} aria-label="Extra price" />
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" disabled={group.choices.length <= 1} onClick={() => update(gi, { choices: group.choices.filter((_, k) => k !== ci) })} aria-label="Remove choice">
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" variant="ghost" size="sm" className="ml-3" onClick={() => update(gi, { choices: [...group.choices, { id: newId(), name: "", price: 0 }] })}>
+            <Plus className="w-3.5 h-3.5 mr-1" /> Add choice
+          </Button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...value, { id: newId(), name: "", type: "multiple", required: false, choices: [{ id: newId(), name: "", price: 0 }] }])}>
+        <Plus className="w-3.5 h-3.5 mr-1" /> Add option group
+      </Button>
+    </div>
+  );
+}
 
 function ItemDialog({
   item,
+  categories,
   isOpen,
   onClose,
   onSave,
 }: {
   item: MenuItem | null; // null = new item
+  categories: string[];
   isOpen: boolean;
   onClose: () => void;
-  onSave: (id: number | null, data: Partial<MenuItem>) => Promise<void>;
+  onSave: (id: number | null, data: Partial<MenuItem>) => Promise<boolean>;
 }) {
   const [form, setForm] = useState<Partial<MenuItem>>({});
   const [saving, setSaving] = useState(false);
@@ -101,7 +132,7 @@ function ItemDialog({
     if (isOpen) {
       setForm(item
         ? { ...item }
-        : { category: "Tacos", price: 0, isNew: false, isAvailable: true, name: "", description: "", note: "" }
+        : { category: categories[0] ?? "", price: 0, isNew: false, isAvailable: true, name: "", description: "", note: "", options: [] }
       );
     }
   }, [item, isOpen]);
@@ -109,11 +140,18 @@ function ItemDialog({
   const set = (k: keyof MenuItem, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    if (!form.name?.trim() || form.price == null) return;
+    if (!form.name?.trim() || form.price == null || !form.category?.trim()) return;
+    const { id: _id, sortOrder: _sortOrder, ...data } = form;
     setSaving(true);
-    await onSave(item?.id ?? null, form);
+    const ok = await onSave(item?.id ?? null, {
+      ...data,
+      // Drop empty rows left in the options editor
+      options: (form.options ?? [])
+        .map((g) => ({ ...g, choices: g.choices.filter((c) => c.name.trim()) }))
+        .filter((g) => g.name.trim() && g.choices.length),
+    });
     setSaving(false);
-    onClose();
+    if (ok) onClose();
   };
 
   return (
@@ -143,13 +181,11 @@ function ItemDialog({
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Category</Label>
-            <Select value={form.category ?? "Tacos"} onValueChange={(v) => set("category", v)}>
-              <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label>Category <span className="text-destructive">*</span></Label>
+            <Input className="bg-background" list="menu-categories" value={form.category ?? ""} onChange={(e) => set("category", e.target.value)} placeholder="Pick a category or type a new one" />
+            <datalist id="menu-categories">
+              {categories.map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div className="space-y-1.5">
             <Label>Description</Label>
@@ -168,6 +204,11 @@ function ItemDialog({
               onChange={(e) => set("note", e.target.value)}
             />
           </div>
+          <div className="space-y-1.5">
+            <Label>Options (sizes, add-ons, sauces…)</Label>
+            <p className="text-xs text-muted-foreground">Customers and cashiers choose these when ordering. Extra prices are added to the item price.</p>
+            <OptionsEditor value={form.options ?? []} onChange={(v) => set("options", v)} />
+          </div>
           <div className="flex gap-6 pt-2">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" checked={form.isNew ?? false} onChange={(e) => set("isNew", e.target.checked)} className="accent-primary w-4 h-4" />
@@ -181,7 +222,7 @@ function ItemDialog({
         </div>
         <DialogFooter className="mt-6">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !form.name?.trim()}>
+          <Button onClick={handleSave} disabled={saving || !form.name?.trim() || !form.category?.trim()}>
             {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Save Item
           </Button>
@@ -202,7 +243,7 @@ function CategorySection({
 }: {
   category: string;
   items: MenuItem[];
-  onSaveItem: (id: number, updates: Partial<MenuItem>) => Promise<void>;
+  onSaveItem: (id: number, updates: Partial<MenuItem>) => Promise<boolean>;
   onEditItem: (item: MenuItem) => void;
   onDeleteItem: (id: number) => void;
 }) {
@@ -214,12 +255,12 @@ function CategorySection({
       {/* Category header */}
       <button
         type="button"
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors text-left"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/40 transition-colors text-left"
         onClick={() => setCollapsed((c) => !c)}
       >
         <div className="flex items-center gap-3">
           {collapsed ? <ChevronRight className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-          <h3 className="font-serif font-bold text-lg text-white">{category}</h3>
+          <h3 className="font-serif font-bold text-lg text-foreground">{category}</h3>
           <span className="text-xs text-muted-foreground">{items.length} items · {availableCount} available</span>
         </div>
       </button>
@@ -230,7 +271,7 @@ function CategorySection({
           {items.map((item) => (
             <div
               key={item.id}
-              className={`flex items-start gap-3 px-5 py-3 transition-colors ${!item.isAvailable ? "opacity-50" : "hover:bg-white/[0.02]"}`}
+              className={`flex items-start gap-3 px-5 py-3 transition-colors ${!item.isAvailable ? "opacity-50" : "hover:bg-muted/40"}`}
             >
               {/* Availability toggle */}
               <button
@@ -250,6 +291,11 @@ function CategorySection({
                   <span className="font-medium text-sm text-foreground">{item.name}</span>
                   {item.isNew && <Badge className="bg-accent/20 text-accent border-accent/30 text-[10px] px-1.5 py-0 h-4">NEW</Badge>}
                   {!item.isAvailable && <Badge className="bg-muted text-muted-foreground border-0 text-[10px] px-1.5 py-0 h-4">Unavailable</Badge>}
+                  {item.options.length > 0 && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4" title={item.options.map((g) => g.name).join(", ")}>
+                      {item.options.length} option {item.options.length === 1 ? "group" : "groups"}
+                    </Badge>
+                  )}
                 </div>
                 {item.description && (
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>
@@ -266,10 +312,10 @@ function CategorySection({
 
               {/* Actions */}
               <div className="flex-shrink-0 flex items-center gap-1 self-center">
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-white" onClick={() => onEditItem(item)}>
+                <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:text-foreground" onClick={() => onEditItem(item)}>
                   <Edit className="w-3.5 h-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => onDeleteItem(item.id)}>
+                <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:text-destructive" onClick={() => onDeleteItem(item.id)}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
@@ -290,6 +336,7 @@ export function AdminMenu() {
   const [editingItem, setEditingItem] = useState<MenuItem | null | "new">(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const loadItems = async () => {
     setLoading(true);
@@ -306,7 +353,7 @@ export function AdminMenu() {
 
   useEffect(() => { loadItems(); }, []);
 
-  const saveItem = async (id: number | null, updates: Partial<MenuItem>) => {
+  const saveItem = async (id: number | null, updates: Partial<MenuItem>): Promise<boolean> => {
     try {
       const res = await fetch(id ? `/api/menu-items/${id}` : "/api/menu-items", {
         method: id ? "PUT" : "POST",
@@ -314,7 +361,7 @@ export function AdminMenu() {
         credentials: "include",
         body: JSON.stringify(updates),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Request failed");
       const saved: MenuItem = await res.json();
       setItems((prev) =>
         id
@@ -322,14 +369,20 @@ export function AdminMenu() {
           : [...prev, saved]
       );
       if (!id) toast({ title: `"${saved.name}" added to the menu` });
+      // Website, online ordering and POS read the same menu
+      queryClient.invalidateQueries({ queryKey: MENU_QUERY_KEY });
+      return true;
     } catch (err: any) {
       toast({ title: "Failed to save item", description: err.message, variant: "destructive" });
+      return false;
     }
   };
 
   const deleteItem = async (id: number) => {
     try {
-      await fetch(`/api/menu-items/${id}`, { method: "DELETE", credentials: "include" });
+      const res = await fetch(`/api/menu-items/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: MENU_QUERY_KEY });
       setItems((prev) => prev.filter((it) => it.id !== id));
       setDeletingId(null);
       toast({ title: "Item removed" });
@@ -365,7 +418,7 @@ export function AdminMenu() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-white mb-1">Menu Management</h1>
+          <h1 className="text-3xl font-serif font-bold text-foreground mb-1">Menu Management</h1>
           <p className="text-muted-foreground">
             {totalItems} items across {grouped.size} categories
             {unavailableCount > 0 && <span className="text-amber-500"> · {unavailableCount} unavailable</span>}
@@ -428,6 +481,7 @@ export function AdminMenu() {
       {/* Edit / New dialog */}
       <ItemDialog
         item={editingItem === "new" ? null : editingItem}
+        categories={[...new Set(items.map((i) => i.category))]}
         isOpen={editingItem !== null}
         onClose={() => setEditingItem(null)}
         onSave={saveItem}

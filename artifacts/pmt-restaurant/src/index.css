@@ -1,7 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Montserrat:wght@400;500;600;700;800&display=swap');
-@layer theme, base, clerk, components, utilities;
+@layer theme, base, components, utilities;
 @import 'tailwindcss';
-@import '@clerk/themes/shadcn.css';
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
@@ -172,5 +171,35 @@
     content: attr(data-placeholder);
     color: hsl(var(--muted-foreground));
     pointer-events: none;
+  }
+}
+/* ── Printing receipts (components/Receipt.tsx → PrintPortal) ───────────── */
+.print-root {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 4mm;
+  }
+
+  body > *:not(.print-root) {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .print-root {
+    display: block;
+    width: 72mm;
+    margin: 0 auto;
+    color: #000;
+  }
+
+  .print-root .receipt,
+  .print-root .receipt * {
+    color: #000 !important;
   }
 }

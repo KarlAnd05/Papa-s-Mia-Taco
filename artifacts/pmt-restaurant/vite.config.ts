@@ -15,6 +15,10 @@ export default defineConfig({
   },
   server: {
     allowedHosts: true,
+    // Local development: forward API calls to the API server (on Replit the router does this)
+    proxy: {
+      '/api': `http://localhost:${process.env.API_PORT ?? 8080}`,
+    },
   },
   build: {
     outDir: 'dist/public',

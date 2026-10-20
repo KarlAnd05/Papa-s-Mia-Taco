@@ -83,7 +83,7 @@ export function CustomerList() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-white mb-1">Customers</h1>
+          <h1 className="text-3xl font-serif font-bold text-foreground mb-1">Customers</h1>
           <p className="text-muted-foreground">Manage customer profiles and loyalty tiers.</p>
         </div>
         <Button onClick={openNewModal} className="bg-primary text-primary-foreground">
@@ -174,7 +174,7 @@ export function CustomerList() {
                 </TableRow>
               ) : (
                 customerData?.customers.map((c) => (
-                  <TableRow key={c.id} className="border-border hover:bg-white/[0.02]">
+                  <TableRow key={c.id} className="border-border hover:bg-muted/40">
                     <TableCell className="font-medium text-foreground">{c.name}</TableCell>
                     <TableCell>
                       <div className="text-sm">{c.email || '-'}</div>
@@ -190,13 +190,13 @@ export function CustomerList() {
                       <TierBadge tier={c.loyaltyTier} />
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">{c.totalOrders}</TableCell>
-                    <TableCell className="text-right text-white font-mono">${c.totalSpent.toFixed(2)}</TableCell>
+                    <TableCell className="text-right text-foreground font-mono">${c.totalSpent.toFixed(2)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Button variant="ghost" size="icon" onClick={() => setViewingCustomer(c)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="View orders">
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openEditModal(c)} className="h-8 w-8 text-muted-foreground hover:text-white">
+                        <Button variant="ghost" size="icon" onClick={() => openEditModal(c)} className="h-8 w-8 text-muted-foreground hover:text-foreground">
                           <Edit className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => confirmDelete(c.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
@@ -215,7 +215,7 @@ export function CustomerList() {
         {customerData && customerData.totalPages > 1 && (
           <div className="flex items-center justify-between p-4 border-t border-border bg-background/30">
             <div className="text-sm text-muted-foreground">
-              Showing <span className="font-medium text-white">{((page - 1) * customerData.limit) + 1}</span> to <span className="font-medium text-white">{Math.min(page * customerData.limit, customerData.total)}</span> of <span className="font-medium text-white">{customerData.total}</span> customers
+              Showing <span className="font-medium text-foreground">{((page - 1) * customerData.limit) + 1}</span> to <span className="font-medium text-foreground">{Math.min(page * customerData.limit, customerData.total)}</span> of <span className="font-medium text-foreground">{customerData.total}</span> customers
             </div>
             <div className="flex gap-2">
               <Button 

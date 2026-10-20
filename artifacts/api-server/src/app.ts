@@ -1,17 +1,14 @@
 import express, { type Express } from "express";
-import cors from "cors";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
-import { clerkMiddleware } from "@clerk/express";
-import { publishableKeyFromHost } from "@clerk/shared/keys";
-import {
-  CLERK_PROXY_PATH,
-  clerkProxyMiddleware,
-  getClerkProxyHost,
-} from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { errorHandler } from "./lib/http";
 
 const app: Express = express();
+
+// Behind Replit's proxy: use X-Forwarded-For for the client IP (rate limiting)
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({
@@ -33,21 +30,22 @@ app.use(
   }),
 );
 
-app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
-
-app.use(cors({ credentials: true, origin: true }));
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
-);
+// The website and API share one origin, so reject state-changing requests that browsers mark as
+// coming from another site (defence in depth on top of the SameSite session cookie).
+// Sec-Fetch-Site is set by the browser itself, so it is unaffected by proxies rewriting Host.
+app.use("/api", (req, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
+  if (req.get("sec-fetch-site") === "cross-site") {
+    return res.status(403).json({ error: "Cross-site request blocked" });
+  }
+  return next();
+});
 
 app.use("/api", router);
+app.use(errorHandler);
 
 export default app;

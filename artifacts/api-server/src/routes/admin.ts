@@ -1,88 +1,18 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
-import { adminsTable, customersTable } from "@workspace/db";
-import { eq, count, sum, avg, gte } from "drizzle-orm";
+import { customersTable, ordersTable, reservationsTable } from "@workspace/db";
+import { and, eq, count, sum, avg, gte, inArray, max, ne, sql } from "drizzle-orm";
+import { requireStaff } from "../lib/auth";
+import { SEAT_HOLDING_STATUSES } from "../lib/availability";
+import { createdOnLocalDate } from "../lib/orders";
+import { getSettings } from "../lib/settings";
+import { zonedNow } from "../lib/time";
 
 const router = Router();
-
-export async function isAdmin(clerkUserId: string): Promise<boolean> {
-  const [admin] = await db
-    .select()
-    .from(adminsTable)
-    .where(eq(adminsTable.clerkUserId, clerkUserId));
-  return !!admin;
-}
-
-// Get admin me
-router.get("/admin/me", async (req, res) => {
-  const auth = getAuth(req);
-  if (!auth?.userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  const adminStatus = await isAdmin(auth.userId);
-  if (!adminStatus) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-
-  const [adminRecord] = await db
-    .select()
-    .from(adminsTable)
-    .where(eq(adminsTable.clerkUserId, auth.userId));
-
-  return res.json({
-    clerkUserId: auth.userId,
-    email: adminRecord?.email ?? "",
-    name: adminRecord?.name ?? null,
-    isAdmin: true,
-  });
-});
-
-// Claim admin (first 2 authenticated users can claim admin)
-router.post("/admin/claim", async (req, res) => {
-  const auth = getAuth(req);
-  if (!auth?.userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  // Check if already admin
-  const already = await isAdmin(auth.userId);
-  if (already) {
-    return res.json({ success: true, message: "Already an admin" });
-  }
-
-  // Count existing admins
-  const [{ count: adminCount }] = await db
-    .select({ count: count() })
-    .from(adminsTable);
-
-  if (adminCount >= 2) {
-    return res.status(403).json({ error: "Maximum admin accounts reached" });
-  }
-
-  // Claim admin
-  await db.insert(adminsTable).values({
-    clerkUserId: auth.userId,
-    email: req.body.email ?? `admin-${auth.userId}@pmt.local`,
-    name: req.body.name ?? null,
-  });
-
-  return res.json({ success: true, message: "Admin access granted" });
-});
+router.use(["/stats", "/admin/notifications"], requireStaff);
 
 // Get stats overview
 router.get("/stats/overview", async (req, res) => {
-  const auth = getAuth(req);
-  if (!auth?.userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  const adminStatus = await isAdmin(auth.userId);
-  if (!adminStatus) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-
   try {
     const [totals] = await db
       .select({
@@ -140,6 +70,81 @@ router.get("/stats/overview", async (req, res) => {
     req.log.error({ err }, "Failed to get stats");
     return res.status(500).json({ error: err.message });
   }
+});
+
+// Today's activity in the restaurant's timezone
+router.get("/stats/today", async (_req, res) => {
+  const settings = await getSettings();
+  const tz = settings.restaurant.timezone;
+  const today = zonedNow(tz).date;
+
+  const [sales] = await db
+    .select({ total: sql<string>`coalesce(sum(${ordersTable.totalAmount}), 0)`, orders: count() })
+    .from(ordersTable)
+    .where(and(eq(ordersTable.status, "completed"), sql`(${ordersTable.completedAt} at time zone ${tz})::date = ${today}::date`));
+
+  const [ordersToday] = await db
+    .select({ count: count() })
+    .from(ordersTable)
+    .where(and(ne(ordersTable.status, "cancelled"), createdOnLocalDate(tz, today)));
+
+  const statusCounts = await db
+    .select({ status: ordersTable.status, count: count() })
+    .from(ordersTable)
+    .where(inArray(ordersTable.status, ["pending", "preparing", "ready"]))
+    .groupBy(ordersTable.status);
+  const byStatus = Object.fromEntries(statusCounts.map((s) => [s.status, s.count]));
+
+  const [booked] = await db
+    .select({ count: count(), guests: sql<number>`coalesce(sum(${reservationsTable.partySize}), 0)::int` })
+    .from(reservationsTable)
+    .where(and(eq(reservationsTable.date, today), eq(reservationsTable.status, "approved")));
+
+  const [pendingRes] = await db
+    .select({ count: count() })
+    .from(reservationsTable)
+    .where(and(eq(reservationsTable.status, "pending"), gte(reservationsTable.date, today)));
+
+  res.json({
+    date: today,
+    salesToday: parseFloat(sales.total),
+    completedOrdersToday: sales.orders,
+    ordersToday: ordersToday.count,
+    ordersWaiting: byStatus.pending ?? 0,
+    ordersInProgress: (byStatus.preparing ?? 0) + (byStatus.ready ?? 0),
+    reservationsToday: booked.count,
+    guestsToday: booked.guests,
+    pendingReservations: pendingRes.count,
+  });
+});
+
+// Polled by the admin panel to show badges and alert staff about new online orders/reservations
+router.get("/admin/notifications/counts", async (_req, res) => {
+  const settings = await getSettings();
+  const today = zonedNow(settings.restaurant.timezone).date;
+
+  const [orders] = await db
+    .select({ count: count(), latestId: max(ordersTable.id) })
+    .from(ordersTable)
+    .where(eq(ordersTable.status, "pending"));
+
+  const [reservations] = await db
+    .select({ count: count(), latestId: max(reservationsTable.id) })
+    .from(reservationsTable)
+    .where(and(eq(reservationsTable.status, "pending"), gte(reservationsTable.date, today)));
+
+  const [upcoming] = await db
+    .select({ count: count() })
+    .from(reservationsTable)
+    .where(and(eq(reservationsTable.date, today), inArray(reservationsTable.status, SEAT_HOLDING_STATUSES)));
+
+  res.json({
+    newOrders: orders.count,
+    latestNewOrderId: orders.latestId ?? 0,
+    pendingReservations: reservations.count,
+    latestPendingReservationId: reservations.latestId ?? 0,
+    reservationsToday: upcoming.count,
+  });
 });
 
 export default router;

@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { customersTable } from "@workspace/db";
 import { eq, ilike, or, and, asc, desc, count, sql } from "drizzle-orm";
@@ -11,19 +10,12 @@ import {
   UpdateCustomerParams,
   DeleteCustomerParams,
 } from "@workspace/api-zod";
+import { requireStaff } from "../lib/auth";
 
 const router = Router();
 
-function requireAdmin(req: any, res: any, next: any) {
-  const auth = getAuth(req);
-  if (!auth?.userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-}
-
 // List customers
-router.get("/customers", requireAdmin, async (req, res) => {
+router.get("/customers", requireStaff, async (req, res) => {
   try {
     const query = ListCustomersQueryParams.parse(req.query);
     const {
@@ -99,7 +91,7 @@ router.get("/customers", requireAdmin, async (req, res) => {
 });
 
 // Create customer
-router.post("/customers", requireAdmin, async (req, res) => {
+router.post("/customers", requireStaff, async (req, res) => {
   try {
     const body = CreateCustomerBody.parse(req.body);
     const [customer] = await db
@@ -123,7 +115,7 @@ router.post("/customers", requireAdmin, async (req, res) => {
 });
 
 // Get customer
-router.get("/customers/:id", requireAdmin, async (req, res) => {
+router.get("/customers/:id", requireStaff, async (req, res) => {
   try {
     const { id } = GetCustomerParams.parse({ id: Number(req.params.id) });
     const [customer] = await db
@@ -141,7 +133,7 @@ router.get("/customers/:id", requireAdmin, async (req, res) => {
 });
 
 // Update customer
-router.put("/customers/:id", requireAdmin, async (req, res) => {
+router.put("/customers/:id", requireStaff, async (req, res) => {
   try {
     const { id } = UpdateCustomerParams.parse({ id: Number(req.params.id) });
     const body = UpdateCustomerBody.parse(req.body);
@@ -171,7 +163,7 @@ router.put("/customers/:id", requireAdmin, async (req, res) => {
 });
 
 // Delete customer
-router.delete("/customers/:id", requireAdmin, async (req, res) => {
+router.delete("/customers/:id", requireStaff, async (req, res) => {
   try {
     const { id } = DeleteCustomerParams.parse({ id: Number(req.params.id) });
     const [deleted] = await db
